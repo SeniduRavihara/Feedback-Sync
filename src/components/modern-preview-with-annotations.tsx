@@ -78,8 +78,8 @@ export default function ModernPreviewWithAnnotations({
         console.log("✅ Widget is ready!");
         setIsWidgetReady(true);
       } else if (event.data.type === "ANNOTATION_ADDED") {
-        console.log("📍 Annotation added:", event.data.annotation);
-        setCurrentAnnotation(event.data.annotation);
+        console.log("📍 Annotation added:", event.data.data);
+        setCurrentAnnotation(event.data.data);
         setIsPanelOpen(true);
       } else if (event.data.type === "SCREENSHOT_CAPTURED") {
         console.log("📸 Screenshot captured successfully");

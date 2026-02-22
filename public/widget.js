@@ -190,125 +190,78 @@
     );
   }
 
-  // Capture screenshot with html2canvas
-  function captureScreenshot() {
-    console.log("Widget: Capture screenshot called, html2canvas typeof:", typeof html2canvas);
-    // Check if html2canvas is already loaded
-    if (typeof html2canvas !== "undefined") {
-      performCapture();
-    } else {
-      console.log("Widget: Dynamically loading html2canvas script...");
-      // Load html2canvas dynamically
-      const script = document.createElement("script");
-      script.src =
-        "https://cdn.jsdelivr.net/npm/html2canvas@1.4.1/dist/html2canvas.min.js";
-      script.onload = () => {
-        console.log("Widget: html2canvas loaded successfully");
-        performCapture();
-      };
-      script.onerror = () => {
-        console.error("Widget: html2canvas failed to load from CDN");
-        window.parent.postMessage(
-          {
-            type: "SCREENSHOT_ERROR",
-            error: "Failed to load html2canvas library",
-          },
-          "*"
-        );
-      };
-      document.head.appendChild(script);
-    }
-  }
-
-  function performCapture() {
-    // Temporarily hide annotation overlay and markers for clean screenshot
+  // Capture screenshot using native browser Screen Capture API
+  function captureScreenshot(requestedAnnotations) {
+    // Hide overlay and markers for a clean screenshot
     const overlay = annotationOverlay;
     const markers = Array.from(
       document.querySelectorAll(".feedback-annotation-marker")
     );
-
     if (overlay) overlay.style.display = "none";
-    markers.forEach((m) => (m.style.display = "none"));
+    markers.forEach(function(m) { m.style.display = "none"; });
 
-    // Suppress console.warn for html2canvas color issues
-    const originalWarn = console.warn;
-    console.warn = function () {};
+    // Use native browser Screen Capture API — works perfectly regardless of CSS or CORS
+    navigator.mediaDevices
+      .getDisplayMedia({ video: { mediaSource: "screen" }, audio: false })
+      .then(function(stream) {
+        var video = document.createElement("video");
+        video.srcObject = stream;
+        video.play();
 
-    console.log("Widget: Calling html2canvas...");
-    html2canvas(document.body, {
-      useCORS: true,
-      allowTaint: true,
-      logging: true, // Enable logging temporarily to see where it fails
-      scale: window.devicePixelRatio || 1, // Better quality
-      windowWidth: document.documentElement.scrollWidth,
-      windowHeight: document.documentElement.scrollHeight,
-      x: window.pageXOffset,
-      y: window.pageYOffset,
-      width: window.innerWidth,
-      height: window.innerHeight,
-      foreignObjectRendering: false, // Can cause issues on some browsers
-      imageTimeout: 15000, // Important: Don't hang forever waiting for broken images
-      removeContainer: true,
-      ignoreElements: (element) => {
-        // Ignore video elements or specific complex iframes that might stall capture
-        if (element.tagName === 'IFRAME' || element.tagName === 'VIDEO') {
-           return true;
-        }
-        return false;
-      }
-    })
-      .then((canvas) => {
-        console.log("Widget: html2canvas resolved successfully");
-        // Restore console.warn
-        console.warn = originalWarn;
+        video.onloadedmetadata = function() {
+          var canvas = document.createElement("canvas");
+          canvas.width = video.videoWidth;
+          canvas.height = video.videoHeight;
+          var ctx = canvas.getContext("2d");
+          ctx.drawImage(video, 0, 0);
 
-        // Show overlay and markers again
-        if (overlay) overlay.style.display = "block";
-        markers.forEach((m) => (m.style.display = "flex"));
+          // Stop the stream immediately after capturing one frame
+          stream.getTracks().forEach(function(t) { t.stop(); });
 
-        const screenshot = canvas.toDataURL("image/jpeg", 0.85);
+          var screenshot = canvas.toDataURL("image/jpeg", 0.9);
 
-        // Send screenshot to parent with metadata
-        window.parent.postMessage(
-          {
-            type: "SCREENSHOT_CAPTURED",
-            data: {
-              screenshot: screenshot,
-              url: window.location.href,
-              timestamp: new Date().toISOString(),
-              viewport: {
-                width: window.innerWidth,
-                height: window.innerHeight,
-                scrollX: window.pageXOffset,
-                scrollY: window.pageYOffset,
+          // Restore overlay and markers
+          if (overlay) overlay.style.display = "block";
+          markers.forEach(function(m) { m.style.display = "flex"; });
+
+          window.parent.postMessage(
+            {
+              type: "SCREENSHOT_CAPTURED",
+              data: {
+                screenshot: screenshot,
+                url: window.location.href,
+                timestamp: new Date().toISOString(),
+                viewport: {
+                  width: window.innerWidth,
+                  height: window.innerHeight,
+                  scrollX: window.pageXOffset,
+                  scrollY: window.pageYOffset,
+                },
+                annotations: (requestedAnnotations || annotations).map(function(a) {
+                  return { id: a.id, x: a.x, y: a.y };
+                }),
               },
-              annotations: annotations.map((a) => ({
-                id: a.id,
-                x: a.x,
-                y: a.y,
-              })),
             },
-          },
-          "*"
-        );
+            "*"
+          );
+        };
       })
-      .catch((error) => {
-        // Restore console.warn
-        console.warn = originalWarn;
-
-        // Show overlay and markers again
+      .catch(function(error) {
+        // User cancelled or browser denied permission
+        // Restore overlay and markers
         if (overlay) overlay.style.display = "block";
-        markers.forEach((m) => (m.style.display = "flex"));
+        markers.forEach(function(m) { m.style.display = "flex"; });
 
         window.parent.postMessage(
           {
             type: "SCREENSHOT_ERROR",
-            error: error.message,
+            error: error.message || "Screen capture was cancelled or denied.",
           },
           "*"
         );
       });
   }
+
 
   // Listen for messages from parent dashboard
   window.addEventListener("message", function (event) {

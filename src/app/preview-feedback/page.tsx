@@ -1,6 +1,7 @@
 "use client";
 
 import ModernPreviewWithAnnotations from "@/components/modern-preview-with-annotations";
+import { useAuth } from "@/hooks/use-auth";
 import { use, useState } from "react";
 
 interface PreviewFeedbackPageProps {
@@ -16,6 +17,7 @@ export default function PreviewFeedbackPage({
   const params = use(searchParams);
   const websiteUrl = params.url || "";
   const projectId = params.projectId || "";
+  const { user } = useAuth();
 
   const [savedSuccess, setSavedSuccess] = useState(false);
 
@@ -56,6 +58,8 @@ export default function PreviewFeedbackPage({
           screenshot: data.screenshot,
           pageUrl: data.pageUrl,
           metadata: data.metadata,
+          clientId: user?.uid || "unknown_user",
+          clientName: user?.displayName || user?.email?.split('@')[0] || "Guest Reviewer",
         }),
       });
 
