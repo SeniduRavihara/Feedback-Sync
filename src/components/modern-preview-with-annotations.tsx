@@ -100,6 +100,7 @@ export default function ModernPreviewWithAnnotations({
         setIsCapturing(false);
       } else if (event.data.type === "SAVE_FEEDBACK_SUCCESS") {
         console.log("✅ Feedback saved with ID:", event.data.feedbackId);
+        clearTimeout((window as any)._saveTimeout);
         setIsSaving(false);
         setShowSuccess(true);
         setTimeout(() => {
@@ -112,6 +113,7 @@ export default function ModernPreviewWithAnnotations({
         }, 2000);
       } else if (event.data.type === "SAVE_FEEDBACK_ERROR") {
         console.error("❌ Save error:", event.data.error);
+        clearTimeout((window as any)._saveTimeout);
         setIsSaving(false);
         alert("Failed to save feedback: " + event.data.error);
       }
@@ -198,6 +200,16 @@ export default function ModernPreviewWithAnnotations({
 
     setIsSaving(true);
     console.log("💾 Sending save request to widget...");
+
+    // Safety timeout - if no response in 15 seconds, reset
+    const timeout = setTimeout(() => {
+      console.error("⏰ Save timeout - no response from widget after 15s");
+      setIsSaving(false);
+      alert("Save timeout - please check browser console and try again");
+    }, 15000);
+
+    // Store timeout in ref so it can be cleared by message handler
+    (window as any)._saveTimeout = timeout;
 
     // Send save request to widget - it will handle Firestore directly
     sendMessageToIframe({
@@ -350,20 +362,20 @@ export default function ModernPreviewWithAnnotations({
                           {annotation.comment}
                         </p>
                         <p className="text-xs text-gray-500 mt-1">
-                        Position: {annotation.x.toFixed(1)}%,{" "}
-                        {annotation.y.toFixed(1)}%
-                      </p>
+                          Position: {annotation.x.toFixed(1)}%,{" "}
+                          {annotation.y.toFixed(1)}%
+                        </p>
+                      </div>
+                      <button
+                        onClick={() => deleteAnnotation(annotation.id)}
+                        className="opacity-0 group-hover:opacity-100 p-1 hover:bg-red-900 rounded transition-all"
+                      >
+                        <X className="w-4 h-4 text-red-400" />
+                      </button>
                     </div>
-                    <button
-                      onClick={() => deleteAnnotation(annotation.id)}
-                      className="opacity-0 group-hover:opacity-100 p-1 hover:bg-red-900 rounded transition-all"
-                    >
-                      <X className="w-4 h-4 text-red-400" />
-                    </button>
                   </div>
-                </div>
-              ))
-            )}
+                ))
+              )}
             </div>
 
             {/* Screenshot Preview */}

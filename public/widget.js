@@ -51,36 +51,48 @@
   let annotationMode = false;
   let capturePromptOverlay = null;
   let db = null;
-
-  // Initialize Firebase
-  function initFirebase() {
-    if (!window.firebase) {
-      console.log("📦 Loading Firebase SDK...");
-      loadFirebaseSDK(() => {
-        console.log("✅ Firebase SDK loaded");
-        const app = firebase.initializeApp(firebaseConfig);
-        db = firebase.firestore(app);
-        console.log("✅ Firestore initialized");
-      });
-    } else {
-      const app = firebase.initializeApp(firebaseConfig);
-      db = firebase.firestore(app);
-    }
-  }
+  let firebaseReady = false;
 
   // Load Firebase SDK dynamically
-  function loadFirebaseSDK(callback) {
-    const script1 = document.createElement("script");
-    script1.src =
-      "https://www.gstatic.com/firebasejs/9.22.0/firebase-app-compat.js";
-    script1.onload = () => {
-      const script2 = document.createElement("script");
-      script2.src =
-        "https://www.gstatic.com/firebasejs/9.22.0/firebase-firestore-compat.js";
-      script2.onload = callback;
-      document.head.appendChild(script2);
-    };
-    document.head.appendChild(script1);
+  function loadFirebaseSDK() {
+    return new Promise((resolve, reject) => {
+      if (window.firebase) {
+        resolve();
+        return;
+      }
+
+      const script1 = document.createElement("script");
+      script1.src =
+        "https://www.gstatic.com/firebasejs/9.22.0/firebase-app-compat.js";
+      script1.onerror = () => reject(new Error("Failed to load Firebase App"));
+      script1.onload = () => {
+        const script2 = document.createElement("script");
+        script2.src =
+          "https://www.gstatic.com/firebasejs/9.22.0/firebase-firestore-compat.js";
+        script2.onerror = () =>
+          reject(new Error("Failed to load Firebase Firestore"));
+        script2.onload = () => resolve();
+        document.head.appendChild(script2);
+      };
+      document.head.appendChild(script1);
+    });
+  }
+
+  // Initialize Firebase
+  async function initFirebase() {
+    try {
+      console.log("📦 Loading Firebase SDK...");
+      await loadFirebaseSDK();
+      console.log("✅ Firebase SDK loaded");
+
+      const app = firebase.initializeApp(firebaseConfig);
+      db = firebase.firestore(app);
+      firebaseReady = true;
+      console.log("✅ Firestore initialized and ready");
+    } catch (error) {
+      console.error("❌ Firebase initialization failed:", error);
+      firebaseReady = false;
+    }
   }
 
   // Initialize Firebase on load
@@ -377,68 +389,60 @@
   }
 
   // Save feedback directly to Firestore
-  function saveFeedbackToFirestore(feedbackData) {
+  async function saveFeedbackToFirestore(feedbackData) {
     console.log("💾 Save request received", feedbackData);
-    
-    // Wait for Firebase to be ready
-    function attemptSave(retries) {
-      if (!window.firebase || !db) {
-        if (retries > 0) {
-          console.log("⏳ Waiting for Firebase... retries left:", retries);
-          setTimeout(function() {
-            attemptSave(retries - 1);
-          }, 500);
-        } else {
-          console.error("❌ Firestore not initialized after waiting");
-          window.parent.postMessage(
-            { type: "SAVE_FEEDBACK_ERROR", error: "Firestore failed to initialize" },
-            "*"
-          );
-        }
-        return;
+
+    try {
+      // Wait for Firebase to be ready (max 10 seconds)
+      const maxWait = 20; // 20 attempts = 10 seconds
+      let attempts = 0;
+
+      while (!firebaseReady && attempts < maxWait) {
+        console.log("⏳ Waiting for Firebase... attempt", attempts + 1);
+        await new Promise((resolve) => setTimeout(resolve, 500));
+        attempts++;
+      }
+
+      if (!firebaseReady || !db) {
+        throw new Error("Firebase failed to initialize after 10 seconds");
       }
 
       console.log("💾 Saving feedback to Firestore...");
 
-      db.collection("feedback")
-        .add({
-          projectId: feedbackData.projectId,
-          pageUrl: feedbackData.pageUrl || window.location.href,
-          annotations: feedbackData.annotations,
-          screenshot: feedbackData.screenshot || "",
-          clientId: feedbackData.clientId || "widget_user",
-          clientName: feedbackData.clientName || "Anonymous",
-          metadata: {
-            viewport: feedbackData.metadata?.viewport || {},
-            timestamp: new Date().toISOString(),
-            userAgent: navigator.userAgent,
-          },
-          status: "new",
-          createdAt: firebase.firestore.FieldValue.serverTimestamp(),
-        })
-        .then(function (docRef) {
-          console.log("✅ Feedback saved with ID:", docRef.id);
-          window.parent.postMessage(
-            {
-              type: "SAVE_FEEDBACK_SUCCESS",
-              feedbackId: docRef.id,
-            },
-            "*"
-          );
-        })
-        .catch(function (error) {
-          console.error("❌ Error saving feedback:", error);
-          window.parent.postMessage(
-            {
-              type: "SAVE_FEEDBACK_ERROR",
-              error: error.message,
-            },
-            "*"
-          );
-        });
+      const docRef = await db.collection("feedback").add({
+        projectId: feedbackData.projectId,
+        pageUrl: feedbackData.pageUrl || window.location.href,
+        annotations: feedbackData.annotations || [],
+        screenshot: feedbackData.screenshot || "",
+        clientId: feedbackData.clientId || "widget_user",
+        clientName: feedbackData.clientName || "Anonymous",
+        metadata: {
+          viewport: feedbackData.metadata?.viewport || {},
+          timestamp: new Date().toISOString(),
+          userAgent: navigator.userAgent,
+        },
+        status: "new",
+        createdAt: firebase.firestore.FieldValue.serverTimestamp(),
+      });
+
+      console.log("✅ Feedback saved with ID:", docRef.id);
+      window.parent.postMessage(
+        {
+          type: "SAVE_FEEDBACK_SUCCESS",
+          feedbackId: docRef.id,
+        },
+        "*"
+      );
+    } catch (error) {
+      console.error("❌ Error saving feedback:", error);
+      window.parent.postMessage(
+        {
+          type: "SAVE_FEEDBACK_ERROR",
+          error: error.message || "Failed to save feedback",
+        },
+        "*"
+      );
     }
-    
-    attemptSave(10); // Try up to 10 times (5 seconds)
   }
 
   // Listen for messages from parent dashboard
