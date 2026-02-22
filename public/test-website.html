@@ -1,0 +1,300 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Test Website - Feedback Widget Demo</title>
+    <style>
+      * {
+        margin: 0;
+        padding: 0;
+        box-sizing: border-box;
+      }
+
+      body {
+        font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "Roboto",
+          "Oxygen", "Ubuntu", "Cantarell", sans-serif;
+        line-height: 1.6;
+        color: #333;
+      }
+
+      .header {
+        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        color: white;
+        padding: 60px 20px;
+        text-align: center;
+      }
+
+      .header h1 {
+        font-size: 48px;
+        margin-bottom: 10px;
+      }
+
+      .header p {
+        font-size: 20px;
+        opacity: 0.9;
+      }
+
+      .container {
+        max-width: 1200px;
+        margin: 0 auto;
+        padding: 40px 20px;
+      }
+
+      .section {
+        margin: 60px 0;
+        padding: 40px;
+        background: #f8f9fa;
+        border-radius: 12px;
+        border: 2px solid #e9ecef;
+      }
+
+      .section h2 {
+        color: #667eea;
+        margin-bottom: 20px;
+        font-size: 32px;
+      }
+
+      .section p {
+        margin-bottom: 15px;
+        font-size: 18px;
+      }
+
+      .button {
+        display: inline-block;
+        padding: 15px 30px;
+        background: #667eea;
+        color: white;
+        text-decoration: none;
+        border-radius: 8px;
+        font-weight: bold;
+        margin: 10px 10px 10px 0;
+        transition: background 0.3s;
+      }
+
+      .button:hover {
+        background: #5568d3;
+      }
+
+      .grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+        gap: 30px;
+        margin-top: 30px;
+      }
+
+      .card {
+        background: white;
+        padding: 30px;
+        border-radius: 12px;
+        box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+      }
+
+      .card h3 {
+        color: #667eea;
+        margin-bottom: 15px;
+      }
+
+      .form-group {
+        margin-bottom: 20px;
+      }
+
+      .form-group label {
+        display: block;
+        margin-bottom: 8px;
+        font-weight: bold;
+        color: #495057;
+      }
+
+      .form-group input,
+      .form-group textarea {
+        width: 100%;
+        padding: 12px;
+        border: 2px solid #e9ecef;
+        border-radius: 8px;
+        font-size: 16px;
+      }
+
+      .form-group input:focus,
+      .form-group textarea:focus {
+        outline: none;
+        border-color: #667eea;
+      }
+
+      footer {
+        background: #2d3748;
+        color: white;
+        text-align: center;
+        padding: 40px 20px;
+        margin-top: 60px;
+      }
+
+      .badge {
+        display: inline-block;
+        padding: 8px 16px;
+        background: #667eea;
+        color: white;
+        border-radius: 20px;
+        font-size: 14px;
+        margin-bottom: 20px;
+      }
+
+      .image-placeholder {
+        width: 100%;
+        height: 200px;
+        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        border-radius: 8px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        color: white;
+        font-size: 24px;
+        margin: 20px 0;
+      }
+    </style>
+  </head>
+  <body>
+    <!-- Header -->
+    <div class="header">
+      <h1>🚀 Welcome to Our Test Website</h1>
+      <p>This page demonstrates the Feedback-Sync widget integration</p>
+    </div>
+
+    <!-- Main Content -->
+    <div class="container">
+      <!-- Introduction Section -->
+      <div class="section">
+        <span class="badge">✨ New Feature</span>
+        <h2>About This Demo</h2>
+        <p>
+          This is a sample website to test the
+          <strong>Feedback-Sync</strong> embeddable widget. The widget is
+          currently loaded but completely invisible on this live page.
+        </p>
+        <p>
+          <strong>How it works:</strong> When you open this page in the
+          Feedback-Sync dashboard's preview mode, the widget will activate and
+          allow you to add annotations and capture screenshots.
+        </p>
+        <p>
+          Try clicking around different sections when viewing through the
+          dashboard!
+        </p>
+      </div>
+
+      <!-- Features Grid -->
+      <div class="section">
+        <h2>📋 Sample Sections to Test</h2>
+        <div class="grid">
+          <div class="card">
+            <h3>Feature 1: User Dashboard</h3>
+            <p>
+              This could be a user dashboard section. Try annotating this card
+              to report issues or suggest improvements.
+            </p>
+            <a href="#" class="button">View Dashboard</a>
+          </div>
+
+          <div class="card">
+            <h3>Feature 2: Analytics</h3>
+            <p>
+              Analytics and reporting section. Perfect for testing annotation
+              placement on different elements.
+            </p>
+            <a href="#" class="button">View Analytics</a>
+          </div>
+
+          <div class="card">
+            <h3>Feature 3: Settings</h3>
+            <p>
+              Settings and configuration panel. Try adding feedback on specific
+              UI elements here.
+            </p>
+            <a href="#" class="button">Open Settings</a>
+          </div>
+        </div>
+      </div>
+
+      <!-- Contact Form Section -->
+      <div class="section">
+        <h2>📝 Contact Form</h2>
+        <p>A sample form to test annotations on form fields:</p>
+
+        <div class="form-group">
+          <label for="name">Your Name</label>
+          <input type="text" id="name" placeholder="Enter your name" />
+        </div>
+
+        <div class="form-group">
+          <label for="email">Email Address</label>
+          <input type="email" id="email" placeholder="your.email@example.com" />
+        </div>
+
+        <div class="form-group">
+          <label for="message">Message</label>
+          <textarea
+            id="message"
+            rows="4"
+            placeholder="Type your message here..."
+          ></textarea>
+        </div>
+
+        <a href="#" class="button">Send Message</a>
+      </div>
+
+      <!-- Image Section -->
+      <div class="section">
+        <h2>🖼️ Visual Content</h2>
+        <p>Test annotations on visual elements:</p>
+        <div class="image-placeholder">Image Placeholder</div>
+        <p>
+          You can annotate this image area to point out design issues or
+          improvements.
+        </p>
+      </div>
+
+      <!-- Navigation Section -->
+      <div class="section">
+        <h2>🧭 Navigation Links</h2>
+        <a href="#" class="button">Home</a>
+        <a href="#" class="button">Products</a>
+        <a href="#" class="button">Services</a>
+        <a href="#" class="button">About Us</a>
+        <a href="#" class="button">Contact</a>
+      </div>
+    </div>
+
+    <!-- Footer -->
+    <footer>
+      <p>&copy; 2026 Test Website. Powered by Feedback-Sync.</p>
+      <p style="opacity: 0.7; margin-top: 10px; font-size: 14px">
+        Widget Status:
+        <span id="widget-status" style="color: #ffd700">Loaded (Dormant)</span>
+      </p>
+    </footer>
+
+    <!-- 
+    IMPORTANT: This is where the Feedback-Sync widget is embedded
+    
+    For TESTING:
+    - Replace "http://localhost:3000" with your actual Feedback-Sync domain
+    - Replace "test-project" with your actual project ID
+    
+    For PRODUCTION:
+    - Use: https://feedback-sync.vercel.app/api/widget
+  -->
+    <script
+      src="http://localhost:3000/api/widget"
+      data-project-id="test-project"
+    ></script>
+
+    <script>
+      // Optional: Detect if running in iframe (preview mode)
+      if (window.parent !== window) {
+        document.getElementById("widget-status").textContent =
+          "Loaded (Active in Preview)";
+        document.getElementById("widget-status").style.color = "#00ff00";
+      }
+    </script>
+  </body>
+</html>
