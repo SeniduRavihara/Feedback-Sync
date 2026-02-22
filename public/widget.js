@@ -327,6 +327,40 @@
         windowHeight: window.innerHeight,
         x: window.pageXOffset,
         y: window.pageYOffset,
+        ignoreElements: function (element) {
+          // Skip elements that might have problematic CSS
+          return false;
+        },
+        onclone: function (clonedDoc) {
+          // Replace oklch() colors with fallback colors in the cloned document
+          try {
+            const styleSheets = clonedDoc.styleSheets;
+            for (let i = 0; i < styleSheets.length; i++) {
+              try {
+                const rules = styleSheets[i].cssRules || styleSheets[i].rules;
+                for (let j = 0; j < rules.length; j++) {
+                  const rule = rules[j];
+                  if (rule.style) {
+                    // Replace oklch colors with transparent or basic colors
+                    for (let prop of rule.style) {
+                      if (
+                        rule.style[prop] &&
+                        rule.style[prop].includes("oklch")
+                      ) {
+                        rule.style[prop] = "transparent";
+                      }
+                    }
+                  }
+                }
+              } catch (e) {
+                // Skip stylesheets we can't access (CORS)
+                continue;
+              }
+            }
+          } catch (e) {
+            console.warn("Could not process stylesheets:", e);
+          }
+        },
       });
 
       // Restore overlay and markers
