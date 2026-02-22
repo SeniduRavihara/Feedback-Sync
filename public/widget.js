@@ -51,6 +51,7 @@
   let annotationMode = false;
   let capturePromptOverlay = null;
   let db = null;
+  let storage = null;
   let firebaseReady = false;
 
   // Load Firebase SDK dynamically
@@ -71,7 +72,15 @@
           "https://www.gstatic.com/firebasejs/9.22.0/firebase-firestore-compat.js";
         script2.onerror = () =>
           reject(new Error("Failed to load Firebase Firestore"));
-        script2.onload = () => resolve();
+        script2.onload = () => {
+          const script3 = document.createElement("script");
+          script3.src =
+            "https://www.gstatic.com/firebasejs/9.22.0/firebase-storage-compat.js";
+          script3.onerror = () =>
+            reject(new Error("Failed to load Firebase Storage"));
+          script3.onload = () => resolve();
+          document.head.appendChild(script3);
+        };
         document.head.appendChild(script2);
       };
       document.head.appendChild(script1);
@@ -87,8 +96,9 @@
 
       const app = firebase.initializeApp(firebaseConfig);
       db = firebase.firestore(app);
+      storage = firebase.storage(app);
       firebaseReady = true;
-      console.log("✅ Firestore initialized and ready");
+      console.log("✅ Firestore and Storage initialized and ready");
     } catch (error) {
       console.error("❌ Firebase initialization failed:", error);
       firebaseReady = false;
@@ -388,6 +398,39 @@
       });
   }
 
+  // Upload screenshot to Firebase Storage
+  async function uploadScreenshot(base64Data, feedbackId) {
+    if (!base64Data || !storage) {
+      return null;
+    }
+
+    try {
+      console.log("📤 Uploading screenshot to Storage...");
+
+      // Convert base64 to blob
+      const base64Response = await fetch(base64Data);
+      const blob = await base64Response.blob();
+
+      // Create storage reference
+      const timestamp = new Date().getTime();
+      const storageRef = storage.ref(
+        `feedback-screenshots/${feedbackId}_${timestamp}.jpg`
+      );
+
+      // Upload the blob
+      const snapshot = await storageRef.put(blob);
+
+      // Get download URL
+      const downloadURL = await snapshot.ref.getDownloadURL();
+      console.log("✅ Screenshot uploaded:", downloadURL);
+
+      return downloadURL;
+    } catch (error) {
+      console.error("❌ Screenshot upload failed:", error);
+      return null;
+    }
+  }
+
   // Save feedback directly to Firestore
   async function saveFeedbackToFirestore(feedbackData) {
     console.log("💾 Save request received", feedbackData);
@@ -407,13 +450,15 @@
         throw new Error("Firebase failed to initialize after 10 seconds");
       }
 
-      console.log("💾 Saving feedback to Firestore...");
+      console.log("💾 Creating feedback document...");
 
+      // First create the document to get an ID
       const docRef = await db.collection("feedback").add({
         projectId: feedbackData.projectId,
         pageUrl: feedbackData.pageUrl || window.location.href,
         annotations: feedbackData.annotations || [],
-        screenshot: feedbackData.screenshot || "",
+        screenshot: "", // Will be updated after upload
+        screenshotUrl: "", // Will be set after upload
         clientId: feedbackData.clientId || "widget_user",
         clientName: feedbackData.clientName || "Anonymous",
         metadata: {
@@ -425,11 +470,31 @@
         createdAt: firebase.firestore.FieldValue.serverTimestamp(),
       });
 
-      console.log("✅ Feedback saved with ID:", docRef.id);
+      console.log("✅ Feedback document created with ID:", docRef.id);
+
+      // Upload screenshot if available
+      let screenshotUrl = "";
+      if (feedbackData.screenshot) {
+        screenshotUrl = await uploadScreenshot(
+          feedbackData.screenshot,
+          docRef.id
+        );
+
+        // Update document with screenshot URL
+        if (screenshotUrl) {
+          await docRef.update({
+            screenshotUrl: screenshotUrl,
+          });
+          console.log("✅ Screenshot URL updated in document");
+        }
+      }
+
+      console.log("✅ Feedback fully saved with ID:", docRef.id);
       window.parent.postMessage(
         {
           type: "SAVE_FEEDBACK_SUCCESS",
           feedbackId: docRef.id,
+          screenshotUrl: screenshotUrl,
         },
         "*"
       );
