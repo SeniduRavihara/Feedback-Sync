@@ -63,7 +63,7 @@ Clients add one line to their website:
 
 ```html
 <script
-  src="https://your-domain.vercel.app/api/widget"
+  src="https://feedback-sync-bice.vercel.app/api/widget"
   data-project-id="client-123"
 ></script>
 ```
@@ -173,14 +173,15 @@ git push origin main
 2. Add environment variables (Firebase config)
 3. Deploy
 
-### 3. Update Widget URLs
+### 3. Your Production URL
 
-After deployment, update client script tags:
+✅ **Deployed at:** https://feedback-sync-bice.vercel.app
+
+Client script tag:
 
 ```html
-<!-- Replace localhost with your Vercel domain -->
 <script
-  src="https://your-app.vercel.app/api/widget"
+  src="https://feedback-sync-bice.vercel.app/api/widget"
   data-project-id="client-123"
 ></script>
 ```

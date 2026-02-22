@@ -74,7 +74,7 @@ export default function RootLayout({ children }) {
       <body>
         {children}
         <script
-          src="https://your-domain.vercel.app/api/widget"
+          src="https://feedback-sync-bice.vercel.app/api/widget"
           data-project-id="client-abc123"
         />
       </body>
@@ -226,17 +226,13 @@ When onboarding a new client, send them:
 
 Clients can add custom configuration:
 
-```html
+````html
 <script
-  src="https://your-domain.vercel.app/api/widget"
+  src="https://feedback-sync-bice.vercel.app/api/widget"
   data-project-id="client-123"
   data-environment="production"
 ></script>
-```
-
-This allows you to extend widget functionality in the future without requiring clients to update their integration.
-
----
-
-**Last Updated:** February 2026  
-**Version:** 1.0.0
+```This allows you to extend widget functionality in the future without
+requiring clients to update their integration. --- **Last Updated:** February
+2026 **Version:** 1.0.0
+````

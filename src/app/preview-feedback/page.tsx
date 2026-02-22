@@ -1,6 +1,6 @@
 "use client";
 
-import PreviewWithAnnotations from "@/components/preview-with-annotations";
+import ModernPreviewWithAnnotations from "@/components/modern-preview-with-annotations";
 import { use, useState } from "react";
 
 interface PreviewFeedbackPageProps {
@@ -78,13 +78,7 @@ export default function PreviewFeedbackPage({
 
   return (
     <div className="h-screen flex flex-col">
-      {savedSuccess && (
-        <div className="bg-green-500 text-white px-6 py-3 text-center font-medium">
-          ✅ Feedback saved successfully!
-        </div>
-      )}
-
-      <PreviewWithAnnotations
+      <ModernPreviewWithAnnotations
         websiteUrl={websiteUrl}
         projectId={projectId}
         onSave={handleSaveFeedback}

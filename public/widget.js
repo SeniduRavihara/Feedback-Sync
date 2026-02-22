@@ -192,16 +192,22 @@
 
   // Capture screenshot with html2canvas
   function captureScreenshot() {
+    console.log("Widget: Capture screenshot called, html2canvas typeof:", typeof html2canvas);
     // Check if html2canvas is already loaded
     if (typeof html2canvas !== "undefined") {
       performCapture();
     } else {
+      console.log("Widget: Dynamically loading html2canvas script...");
       // Load html2canvas dynamically
       const script = document.createElement("script");
       script.src =
         "https://cdn.jsdelivr.net/npm/html2canvas@1.4.1/dist/html2canvas.min.js";
-      script.onload = performCapture;
+      script.onload = () => {
+        console.log("Widget: html2canvas loaded successfully");
+        performCapture();
+      };
       script.onerror = () => {
+        console.error("Widget: html2canvas failed to load from CDN");
         window.parent.postMessage(
           {
             type: "SCREENSHOT_ERROR",
@@ -228,19 +234,31 @@
     const originalWarn = console.warn;
     console.warn = function () {};
 
+    console.log("Widget: Calling html2canvas...");
     html2canvas(document.body, {
       useCORS: true,
       allowTaint: true,
-      logging: false,
-      scale: 1,
+      logging: true, // Enable logging temporarily to see where it fails
+      scale: window.devicePixelRatio || 1, // Better quality
       windowWidth: document.documentElement.scrollWidth,
       windowHeight: document.documentElement.scrollHeight,
       x: window.pageXOffset,
       y: window.pageYOffset,
       width: window.innerWidth,
       height: window.innerHeight,
+      foreignObjectRendering: false, // Can cause issues on some browsers
+      imageTimeout: 15000, // Important: Don't hang forever waiting for broken images
+      removeContainer: true,
+      ignoreElements: (element) => {
+        // Ignore video elements or specific complex iframes that might stall capture
+        if (element.tagName === 'IFRAME' || element.tagName === 'VIDEO') {
+           return true;
+        }
+        return false;
+      }
     })
       .then((canvas) => {
+        console.log("Widget: html2canvas resolved successfully");
         // Restore console.warn
         console.warn = originalWarn;
 

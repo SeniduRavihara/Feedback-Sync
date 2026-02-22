@@ -105,7 +105,7 @@ You should see a new document with:
 ```html
 <!-- Add before closing </body> tag -->
 <script
-  src="https://feedback-sync.vercel.app/widget.js"
+  src="https://feedback-sync-bice.vercel.app/api/widget"
   data-project-id="YOUR_PROJECT_ID"
 ></script>
 ```
