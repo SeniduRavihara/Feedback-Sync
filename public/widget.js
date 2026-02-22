@@ -482,6 +482,27 @@
       }
 
       console.log("💾 Creating feedback document...");
+      console.log("Has screenshot data?", !!feedbackData.screenshot);
+      console.log("Screenshot length:", feedbackData.screenshot?.length || 0);
+
+      // TEST: Upload a simple text file to verify Storage works
+      let testFileUrl = "";
+      try {
+        console.log("🧪 TEST: Uploading simple text file to Storage...");
+        const timestamp = Date.now();
+        const testRef = storage.ref(`test-uploads/test_${timestamp}.txt`);
+        const testContent = `Test upload at ${new Date().toISOString()}\nAnnotations: ${feedbackData.annotations.length}`;
+        
+        const uploadTask = testRef.putString(testContent, firebase.storage.StringFormat.RAW, {
+          contentType: 'text/plain'
+        });
+        
+        await uploadTask;
+        testFileUrl = await testRef.getDownloadURL();
+        console.log("✅ TEST FILE UPLOADED TO STORAGE:", testFileUrl);
+      } catch (error) {
+        console.error("❌ TEST UPLOAD FAILED:", error.code, error.message);
+      }
 
       // Upload screenshot FIRST if available
       let screenshotUrl = "";
@@ -493,6 +514,8 @@
           .substr(2, 9)}`;
         screenshotUrl = await uploadScreenshot(feedbackData.screenshot, tempId);
         console.log("Screenshot upload result:", screenshotUrl || "FAILED");
+      } else {
+        console.log("⚠️ No screenshot data provided, skipping upload");
       }
 
       // NOW create the document with the screenshot URL (NOT base64)
