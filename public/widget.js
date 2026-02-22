@@ -53,6 +53,28 @@
   let db = null;
   let storage = null;
   let firebaseReady = false;
+  let html2canvasLoaded = false;
+
+  // Load html2canvas library
+  function loadHtml2Canvas() {
+    return new Promise((resolve, reject) => {
+      if (window.html2canvas) {
+        resolve();
+        return;
+      }
+
+      const script = document.createElement("script");
+      script.src =
+        "https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js";
+      script.onload = () => {
+        html2canvasLoaded = true;
+        console.log("✅ html2canvas loaded");
+        resolve();
+      };
+      script.onerror = () => reject(new Error("Failed to load html2canvas"));
+      document.head.appendChild(script);
+    });
+  }
 
   // Load Firebase SDK dynamically
   function loadFirebaseSDK() {
@@ -115,6 +137,7 @@
 
   // Initialize Firebase on load
   initFirebase();
+  loadHtml2Canvas(); // Load html2canvas too
 
   // Notify parent dashboard that widget is ready
   function notifyReady() {
@@ -266,144 +289,96 @@
     );
   }
 
-  // Show a prompt to the user to capture the screen (required for browser security gesture)
-  function showCapturePrompt() {
-    if (capturePromptOverlay) return;
+  // Capture screenshot using html2canvas - automatic, no user prompt needed!
+  async function captureScreenshot(requestedAnnotations) {
+    if (!window.html2canvas) {
+      console.error("❌ html2canvas not loaded yet");
+      window.parent.postMessage(
+        {
+          type: "SCREENSHOT_ERROR",
+          error: "Screenshot library not ready",
+        },
+        "*"
+      );
+      return;
+    }
 
-    capturePromptOverlay = document.createElement("div");
-    capturePromptOverlay.style.cssText = `
-      position: fixed;
-      top: 50%;
-      left: 50%;
-      transform: translate(-50%, -50%);
-      background: #1e1e1e;
-      color: white;
-      padding: 24px;
-      border-radius: 12px;
-      box-shadow: 0 10px 40px rgba(0,0,0,0.5);
-      z-index: 2147483647;
-      text-align: center;
-      font-family: sans-serif;
-      width: 320px;
-    `;
+    try {
+      console.log("📸 Capturing screenshot with html2canvas...");
 
-    const title = document.createElement("h3");
-    title.textContent = "Confirm Screenshot";
-    title.style.margin = "0 0 12px 0";
+      // Hide overlay and markers for clean screenshot
+      const overlay = annotationOverlay;
+      const markers = Array.from(
+        document.querySelectorAll(".feedback-annotation-marker")
+      );
+      if (overlay) overlay.style.display = "none";
+      markers.forEach(function (m) {
+        m.style.display = "none";
+      });
 
-    const desc = document.createElement("p");
-    desc.textContent =
-      "Click the button below and then select this tab to capture your feedback perfectly.";
-    desc.style.fontSize = "14px";
-    desc.style.color = "#aaa";
-    desc.style.marginBottom = "20px";
+      // Capture the current viewport
+      const canvas = await html2canvas(document.body, {
+        allowTaint: true,
+        useCORS: true,
+        logging: false,
+        width: window.innerWidth,
+        height: window.innerHeight,
+        windowWidth: window.innerWidth,
+        windowHeight: window.innerHeight,
+        x: window.pageXOffset,
+        y: window.pageYOffset,
+      });
 
-    const btn = document.createElement("button");
-    btn.textContent = "Take Screenshot Now";
-    btn.style.cssText = `
-      background: #FF6B6B;
-      color: white;
-      border: none;
-      padding: 12px 24px;
-      border-radius: 6px;
-      font-weight: bold;
-      cursor: pointer;
-      width: 100%;
-      font-size: 16px;
-    `;
+      // Restore overlay and markers
+      if (overlay) overlay.style.display = "block";
+      markers.forEach(function (m) {
+        m.style.display = "flex";
+      });
 
-    btn.onclick = function () {
-      capturePromptOverlay.remove();
-      capturePromptOverlay = null;
-      captureScreenshot();
-    };
+      // Convert to base64
+      const screenshot = canvas.toDataURL("image/jpeg", 0.8);
 
-    capturePromptOverlay.appendChild(title);
-    capturePromptOverlay.appendChild(desc);
-    capturePromptOverlay.appendChild(btn);
-    document.body.appendChild(capturePromptOverlay);
+      console.log("✅ Screenshot captured:", screenshot.length, "bytes");
+
+      // Send to parent
+      window.parent.postMessage(
+        {
+          type: "SCREENSHOT_CAPTURED",
+          data: {
+            screenshot: screenshot,
+            url: window.location.href,
+            timestamp: new Date().toISOString(),
+            viewport: {
+              width: window.innerWidth,
+              height: window.innerHeight,
+              scrollX: window.pageXOffset,
+              scrollY: window.pageYOffset,
+            },
+            annotations: (requestedAnnotations || annotations).map(function (
+              a
+            ) {
+              return { id: a.id, x: a.x, y: a.y };
+            }),
+          },
+        },
+        "*"
+      );
+    } catch (error) {
+      console.error("❌ Screenshot failed:", error);
+      window.parent.postMessage(
+        {
+          type: "SCREENSHOT_ERROR",
+          error: error.message || "Screenshot capture failed",
+        },
+        "*"
+      );
+    }
   }
 
-  // Capture screenshot using native browser Screen Capture API
-  function captureScreenshot(requestedAnnotations) {
-    // Hide overlay and markers for a clean screenshot
-    const overlay = annotationOverlay;
-    const markers = Array.from(
-      document.querySelectorAll(".feedback-annotation-marker")
-    );
-    if (overlay) overlay.style.display = "none";
-    markers.forEach(function (m) {
-      m.style.display = "none";
-    });
-
-    // Use native browser Screen Capture API — works perfectly regardless of CSS or CORS
-    navigator.mediaDevices
-      .getDisplayMedia({ video: { mediaSource: "screen" }, audio: false })
-      .then(function (stream) {
-        var video = document.createElement("video");
-        video.srcObject = stream;
-        video.play();
-
-        video.onloadedmetadata = function () {
-          var canvas = document.createElement("canvas");
-          canvas.width = video.videoWidth;
-          canvas.height = video.videoHeight;
-          var ctx = canvas.getContext("2d");
-          ctx.drawImage(video, 0, 0);
-
-          // Stop the stream immediately after capturing one frame
-          stream.getTracks().forEach(function (t) {
-            t.stop();
-          });
-
-          var screenshot = canvas.toDataURL("image/jpeg", 0.9);
-
-          // Restore overlay and markers
-          if (overlay) overlay.style.display = "block";
-          markers.forEach(function (m) {
-            m.style.display = "flex";
-          });
-
-          window.parent.postMessage(
-            {
-              type: "SCREENSHOT_CAPTURED",
-              data: {
-                screenshot: screenshot,
-                url: window.location.href,
-                timestamp: new Date().toISOString(),
-                viewport: {
-                  width: window.innerWidth,
-                  height: window.innerHeight,
-                  scrollX: window.pageXOffset,
-                  scrollY: window.pageYOffset,
-                },
-                annotations: (requestedAnnotations || annotations).map(
-                  function (a) {
-                    return { id: a.id, x: a.x, y: a.y };
-                  }
-                ),
-              },
-            },
-            "*"
-          );
-        };
-      })
-      .catch(function (error) {
-        // User cancelled or browser denied permission
-        // Restore overlay and markers
-        if (overlay) overlay.style.display = "block";
-        markers.forEach(function (m) {
-          m.style.display = "flex";
-        });
-
-        window.parent.postMessage(
-          {
-            type: "SCREENSHOT_ERROR",
-            error: error.message || "Screen capture was cancelled or denied.",
-          },
-          "*"
-        );
-      });
+  // Show a prompt is NO LONGER NEEDED - html2canvas captures automatically!
+  function showCapturePrompt() {
+    // Just call captureScreenshot directly
+    captureScreenshot();
   }
 
   // Upload screenshot to Firebase Storage
@@ -491,12 +466,18 @@
         console.log("🧪 TEST: Uploading simple text file to Storage...");
         const timestamp = Date.now();
         const testRef = storage.ref(`test-uploads/test_${timestamp}.txt`);
-        const testContent = `Test upload at ${new Date().toISOString()}\nAnnotations: ${feedbackData.annotations.length}`;
-        
-        const uploadTask = testRef.putString(testContent, firebase.storage.StringFormat.RAW, {
-          contentType: 'text/plain'
-        });
-        
+        const testContent = `Test upload at ${new Date().toISOString()}\nAnnotations: ${
+          feedbackData.annotations.length
+        }`;
+
+        const uploadTask = testRef.putString(
+          testContent,
+          firebase.storage.StringFormat.RAW,
+          {
+            contentType: "text/plain",
+          }
+        );
+
         await uploadTask;
         testFileUrl = await testRef.getDownloadURL();
         console.log("✅ TEST FILE UPLOADED TO STORAGE:", testFileUrl);
