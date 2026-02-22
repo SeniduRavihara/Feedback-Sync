@@ -488,7 +488,9 @@
       if (feedbackData.screenshot) {
         console.log("📤 Uploading screenshot before creating document...");
         // Generate a temporary ID for the upload path
-        const tempId = `temp_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+        const tempId = `temp_${Date.now()}_${Math.random()
+          .toString(36)
+          .substr(2, 9)}`;
         screenshotUrl = await uploadScreenshot(feedbackData.screenshot, tempId);
         console.log("Screenshot upload result:", screenshotUrl || "FAILED");
       }
