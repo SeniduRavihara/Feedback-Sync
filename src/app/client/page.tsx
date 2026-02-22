@@ -1,26 +1,42 @@
-'use client';
+"use client";
 
-import { AudioRecorder } from '@/components/audio-recorder';
-import { useAuth } from '@/hooks/use-auth';
-import { auth, db } from '@/lib/firebase';
-import { addDoc, collection, onSnapshot, query, where } from 'firebase/firestore';
+import { AudioRecorder } from "@/components/audio-recorder";
+import { PreviewAnnotator } from "@/components/preview-annotator";
+import { useAuth } from "@/hooks/use-auth";
+import { auth, db } from "@/lib/firebase";
 import {
-    AlertCircle,
-    BrainCircuit, Check,
-    CheckCircle2, Clock,
-    Code2,
-    Loader2,
-    LogOut,
-    MessageSquare,
-    Mic,
-    Send,
-    X
-} from 'lucide-react';
-import { AnimatePresence, motion } from 'motion/react';
-import { useRouter } from 'next/navigation';
-import { useEffect, useState } from 'react';
+  addDoc,
+  collection,
+  onSnapshot,
+  query,
+  where,
+} from "firebase/firestore";
+import {
+  AlertCircle,
+  BrainCircuit,
+  Check,
+  CheckCircle2,
+  Clock,
+  Code2,
+  Eye,
+  Loader2,
+  LogOut,
+  MessageSquare,
+  Mic,
+  Send,
+  X,
+} from "lucide-react";
+import { AnimatePresence, motion } from "motion/react";
+import { useRouter } from "next/navigation";
+import { useEffect, useState } from "react";
 
-function SuccessBanner({ message, onClose }: { message: string; onClose: () => void }) {
+function SuccessBanner({
+  message,
+  onClose,
+}: {
+  message: string;
+  onClose: () => void;
+}) {
   useEffect(() => {
     const t = setTimeout(onClose, 4000);
     return () => clearTimeout(t);
@@ -35,29 +51,35 @@ function SuccessBanner({ message, onClose }: { message: string; onClose: () => v
     >
       <Check className="w-4 h-4 shrink-0" />
       {message}
-      <button onClick={onClose} className="ml-auto opacity-50 hover:opacity-100"><X className="w-4 h-4" /></button>
+      <button
+        onClick={onClose}
+        className="ml-auto opacity-50 hover:opacity-100"
+      >
+        <X className="w-4 h-4" />
+      </button>
     </motion.div>
   );
 }
 
 export default function ClientPortal() {
   const { user, role, loading: authLoading, fetchRole } = useAuth();
-  const [activeTab, setActiveTab] = useState<'submit' | 'history'>('submit');
+  const [activeTab, setActiveTab] = useState<"submit" | "history">("submit");
   const [projects, setProjects] = useState<any[]>([]);
   const [myFeedbacks, setMyFeedbacks] = useState<any[]>([]);
   const [selectedProject, setSelectedProject] = useState<any>(null);
-  const [feedback, setFeedback] = useState('');
-  const [type, setType] = useState<'bug' | 'improvement'>('improvement');
+  const [feedback, setFeedback] = useState("");
+  const [type, setType] = useState<"bug" | "improvement">("improvement");
   const [submitting, setSubmitting] = useState(false);
   const [showAudio, setShowAudio] = useState(false);
-  const [successMessage, setSuccessMessage] = useState('');
+  const [showPreview, setShowPreview] = useState<any | null>(null);
+  const [successMessage, setSuccessMessage] = useState("");
   const router = useRouter();
 
   useEffect(() => {
     if (authLoading) return;
-    
+
     if (!user) {
-      router.push('/auth');
+      router.push("/auth");
       return;
     }
 
@@ -67,11 +89,11 @@ export default function ClientPortal() {
       if (!currentRole && user) {
         currentRole = await fetchRole(user.uid);
       }
-      if (currentRole && currentRole !== 'client') {
-        router.push('/dashboard');
+      if (currentRole && currentRole !== "client") {
+        router.push("/dashboard");
       }
     };
-    
+
     verifyRole();
   }, [user, role, authLoading, router, fetchRole]);
 
@@ -79,21 +101,30 @@ export default function ClientPortal() {
     if (!user) return;
 
     const projectsQ = query(
-      collection(db, 'projects'),
-      where('assignedClients', 'array-contains', user.uid)
+      collection(db, "projects"),
+      where("assignedClients", "array-contains", user.uid)
     );
     const unsubscribeProjects = onSnapshot(projectsQ, (snapshot) => {
-      setProjects(snapshot.docs.map(d => ({ id: d.id, ...d.data() })));
+      setProjects(snapshot.docs.map((d) => ({ id: d.id, ...d.data() })));
     });
 
-    const feedbacksQ = query(collection(db, 'feedback'), where('clientId', '==', user.uid));
+    const feedbacksQ = query(
+      collection(db, "feedback"),
+      where("clientId", "==", user.uid)
+    );
     const unsubscribeFeedbacks = onSnapshot(feedbacksQ, (snapshot) => {
-      const items = snapshot.docs.map(d => ({ id: d.id, ...d.data() }));
-      items.sort((a: any, b: any) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+      const items = snapshot.docs.map((d) => ({ id: d.id, ...d.data() }));
+      items.sort(
+        (a: any, b: any) =>
+          new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
+      );
       setMyFeedbacks(items);
     });
 
-    return () => { unsubscribeProjects(); unsubscribeFeedbacks(); };
+    return () => {
+      unsubscribeProjects();
+      unsubscribeFeedbacks();
+    };
   }, [user]);
 
   const handleSubmit = async (e?: React.FormEvent) => {
@@ -102,23 +133,59 @@ export default function ClientPortal() {
 
     setSubmitting(true);
     try {
-      await addDoc(collection(db, 'feedback'), {
+      await addDoc(collection(db, "feedback"), {
         projectId: selectedProject.id,
+        projectName: selectedProject.name,
         clientId: user.uid,
-        clientName: user.displayName || user.email?.split('@')[0],
+        clientName: user.displayName || user.email?.split("@")[0],
         content: feedback,
         type,
-        status: 'pending',
+        status: "pending",
         createdAt: new Date().toISOString(),
       });
-      setFeedback('');
+      setFeedback("");
       setShowAudio(false);
-      setSuccessMessage('Your feedback has been sent! The engineer will review it soon.');
+      setSuccessMessage(
+        "Your feedback has been sent! The engineer will review it soon."
+      );
     } catch (error) {
-      console.error('Error submitting feedback:', error);
+      console.error("Error submitting feedback:", error);
     } finally {
       setSubmitting(false);
     }
+  };
+
+  const handlePreviewFeedback = async (
+    comment: string,
+    position: { x: number; y: number },
+    metadata?: {
+      screenshot: string;
+      pageUrl: string;
+      annotationNumber: number;
+    }
+  ) => {
+    if (!showPreview || !user) return;
+
+    const feedbackData: any = {
+      projectId: showPreview.id,
+      projectName: showPreview.name,
+      clientId: user.uid,
+      clientName: user.displayName || user.email?.split("@")[0],
+      content: comment,
+      type: "improvement",
+      status: "pending",
+      createdAt: new Date().toISOString(),
+      position: position,
+    };
+
+    // Add screenshot and metadata if available
+    if (metadata) {
+      feedbackData.screenshot = metadata.screenshot;
+      feedbackData.pageUrl = metadata.pageUrl;
+      feedbackData.annotationNumber = metadata.annotationNumber;
+    }
+
+    await addDoc(collection(db, "feedback"), feedbackData);
   };
 
   if (authLoading || (user && !role)) {
@@ -139,22 +206,28 @@ export default function ClientPortal() {
               <div className="w-9 h-9 bg-[#00A388] rounded-xl flex items-center justify-center shadow-lg shadow-[#00A388]/20">
                 <Code2 className="w-5 h-5 text-white" />
               </div>
-              <span className="font-display font-bold text-xl tracking-tight">DevSync</span>
+              <span className="font-display font-bold text-xl tracking-tight">
+                DevSync
+              </span>
             </div>
             {/* Tab Toggle */}
             <div className="flex items-center gap-1 bg-[#1A1A1A] p-1 rounded-xl border border-[#242424]">
               <button
-                onClick={() => setActiveTab('submit')}
+                onClick={() => setActiveTab("submit")}
                 className={`px-4 py-2 rounded-lg text-sm font-bold transition-all ${
-                  activeTab === 'submit' ? 'bg-[#00A388] text-white shadow-lg' : 'text-neutral-500 hover:text-neutral-300'
+                  activeTab === "submit"
+                    ? "bg-[#00A388] text-white shadow-lg"
+                    : "text-neutral-500 hover:text-neutral-300"
                 }`}
               >
                 Submit
               </button>
               <button
-                onClick={() => setActiveTab('history')}
+                onClick={() => setActiveTab("history")}
                 className={`px-4 py-2 rounded-lg text-sm font-bold transition-all ${
-                  activeTab === 'history' ? 'bg-[#00A388] text-white shadow-lg' : 'text-neutral-500 hover:text-neutral-300'
+                  activeTab === "history"
+                    ? "bg-[#00A388] text-white shadow-lg"
+                    : "text-neutral-500 hover:text-neutral-300"
                 }`}
               >
                 History
@@ -171,10 +244,12 @@ export default function ClientPortal() {
               <div className="w-7 h-7 bg-[#00A388] rounded-full flex items-center justify-center text-xs font-bold">
                 {user?.email?.[0].toUpperCase()}
               </div>
-              <span className="text-sm font-bold text-neutral-300 hidden sm:block">{user?.email?.split('@')[0]}</span>
+              <span className="text-sm font-bold text-neutral-300 hidden sm:block">
+                {user?.email?.split("@")[0]}
+              </span>
             </div>
             <button
-              onClick={() => auth.signOut().then(() => router.push('/auth'))}
+              onClick={() => auth.signOut().then(() => router.push("/auth"))}
               className="flex items-center gap-2 text-neutral-600 hover:text-red-500 font-bold transition-colors text-sm"
             >
               <LogOut className="w-4 h-4" />
@@ -187,11 +262,14 @@ export default function ClientPortal() {
       <main className="max-w-4xl mx-auto p-6 md:p-10">
         <AnimatePresence>
           {successMessage && (
-            <SuccessBanner message={successMessage} onClose={() => setSuccessMessage('')} />
+            <SuccessBanner
+              message={successMessage}
+              onClose={() => setSuccessMessage("")}
+            />
           )}
         </AnimatePresence>
 
-        {activeTab === 'submit' ? (
+        {activeTab === "submit" ? (
           <>
             <header className="mb-10 text-center">
               <motion.h1
@@ -214,30 +292,52 @@ export default function ClientPortal() {
             <div className="space-y-8">
               {/* Project Selection */}
               <section>
-                <h2 className="text-xs font-bold text-neutral-600 uppercase tracking-[0.3em] mb-4">Select Project</h2>
+                <h2 className="text-xs font-bold text-neutral-600 uppercase tracking-[0.3em] mb-4">
+                  Select Project
+                </h2>
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                   {projects.map((project) => (
-                    <button
+                    <div
                       key={project.id}
                       onClick={() => setSelectedProject(project)}
-                      className={`p-6 bg-[#0D0D0D] border rounded-2xl text-left transition-all ${
+                      className={`p-6 bg-[#0D0D0D] border rounded-2xl cursor-pointer transition-all ${
                         selectedProject?.id === project.id
-                          ? 'border-[#00A388] ring-2 ring-[#00A388]/10'
-                          : 'border-[#1A1A1A] hover:border-[#00A388]/40'
+                          ? "border-[#00A388] ring-2 ring-[#00A388]/10"
+                          : "border-[#1A1A1A] hover:border-[#00A388]/40"
                       }`}
                     >
                       <div className="flex items-center justify-between mb-2">
                         <h3 className="font-bold text-white">{project.name}</h3>
-                        {selectedProject?.id === project.id && <CheckCircle2 className="w-5 h-5 text-[#00A388]" />}
+                        {selectedProject?.id === project.id && (
+                          <CheckCircle2 className="w-5 h-5 text-[#00A388]" />
+                        )}
                       </div>
-                      <p className="text-sm text-neutral-600 line-clamp-2">{project.description}</p>
-                    </button>
+                      <p className="text-sm text-neutral-600 line-clamp-2 mb-3">
+                        {project.description}
+                      </p>
+                      {project.previewUrl && (
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setShowPreview(project);
+                          }}
+                          className="flex items-center gap-2 text-xs font-bold text-[#00A388] hover:text-white transition-colors"
+                        >
+                          <Eye className="w-3 h-3" />
+                          View Preview & Annotate
+                        </button>
+                      )}
+                    </div>
                   ))}
                   {projects.length === 0 && (
                     <div className="col-span-full py-16 text-center bg-[#0D0D0D] border border-dashed border-[#1A1A1A] rounded-2xl">
                       <AlertCircle className="w-10 h-10 text-neutral-800 mx-auto mb-3" />
-                      <p className="text-neutral-500 font-bold">No projects assigned to you yet</p>
-                      <p className="text-neutral-700 text-sm mt-1">Contact your engineer to get access</p>
+                      <p className="text-neutral-500 font-bold">
+                        No projects assigned to you yet
+                      </p>
+                      <p className="text-neutral-700 text-sm mt-1">
+                        Contact your engineer to get access
+                      </p>
                     </div>
                   )}
                 </div>
@@ -253,20 +353,26 @@ export default function ClientPortal() {
                   >
                     <div className="p-8">
                       <div className="flex items-center justify-between mb-8">
-                        <h2 className="text-2xl font-display font-bold text-white">Your Feedback</h2>
+                        <h2 className="text-2xl font-display font-bold text-white">
+                          Your Feedback
+                        </h2>
                         <div className="flex bg-[#1A1A1A] p-1 rounded-xl border border-[#242424]">
                           <button
-                            onClick={() => setType('improvement')}
+                            onClick={() => setType("improvement")}
                             className={`px-4 py-2 rounded-lg text-sm font-bold transition-all ${
-                              type === 'improvement' ? 'bg-[#00A388] text-white' : 'text-neutral-500 hover:text-neutral-300'
+                              type === "improvement"
+                                ? "bg-[#00A388] text-white"
+                                : "text-neutral-500 hover:text-neutral-300"
                             }`}
                           >
                             Improvement
                           </button>
                           <button
-                            onClick={() => setType('bug')}
+                            onClick={() => setType("bug")}
                             className={`px-4 py-2 rounded-lg text-sm font-bold transition-all ${
-                              type === 'bug' ? 'bg-red-500 text-white' : 'text-neutral-500 hover:text-neutral-300'
+                              type === "bug"
+                                ? "bg-red-500 text-white"
+                                : "text-neutral-500 hover:text-neutral-300"
                             }`}
                           >
                             Bug Report
@@ -288,8 +394,8 @@ export default function ClientPortal() {
                             title="Record audio feedback"
                             className={`absolute bottom-4 right-4 p-3 rounded-full transition-all ${
                               showAudio
-                                ? 'bg-[#00A388] text-white ring-4 ring-[#00A388]/20'
-                                : 'bg-[#121212] text-neutral-500 border border-[#2A2A2A] hover:text-[#00A388] hover:border-[#00A388]'
+                                ? "bg-[#00A388] text-white ring-4 ring-[#00A388]/20"
+                                : "bg-[#121212] text-neutral-500 border border-[#2A2A2A] hover:text-[#00A388] hover:border-[#00A388]"
                             }`}
                           >
                             <Mic className="w-5 h-5" />
@@ -300,12 +406,16 @@ export default function ClientPortal() {
                           {showAudio && (
                             <motion.div
                               initial={{ opacity: 0, height: 0 }}
-                              animate={{ opacity: 1, height: 'auto' }}
+                              animate={{ opacity: 1, height: "auto" }}
                               exit={{ opacity: 0, height: 0 }}
                               className="overflow-hidden"
                             >
                               <AudioRecorder
-                                onTranscription={(text) => setFeedback(prev => prev + (prev ? '\n' : '') + text)}
+                                onTranscription={(text) =>
+                                  setFeedback(
+                                    (prev) => prev + (prev ? "\n" : "") + text
+                                  )
+                                }
                               />
                             </motion.div>
                           )}
@@ -335,8 +445,12 @@ export default function ClientPortal() {
         ) : (
           <>
             <header className="mb-8">
-              <h1 className="text-4xl font-display font-bold text-white mb-1">My Feedback History</h1>
-              <p className="text-neutral-500">Track the status of everything you've submitted</p>
+              <h1 className="text-4xl font-display font-bold text-white mb-1">
+                My Feedback History
+              </h1>
+              <p className="text-neutral-500">
+                Track the status of everything you've submitted
+              </p>
             </header>
 
             <div className="space-y-5">
@@ -354,46 +468,59 @@ export default function ClientPortal() {
                       </div>
                       <div>
                         <h3 className="font-bold text-white">
-                          {projects.find(p => p.id === item.projectId)?.name || 'Project'}
+                          {projects.find((p) => p.id === item.projectId)
+                            ?.name || "Project"}
                         </h3>
-                        <p className="text-xs text-neutral-600">{new Date(item.createdAt).toLocaleString()}</p>
+                        <p className="text-xs text-neutral-600">
+                          {new Date(item.createdAt).toLocaleString()}
+                        </p>
                       </div>
                     </div>
                     <div className="flex items-center gap-2">
-                      <span className={`px-3 py-1 rounded-full text-[10px] font-bold uppercase tracking-widest ${
-                        item.type === 'bug' ? 'bg-red-500/10 text-red-500' : 'bg-[#00A388]/10 text-[#00A388]'
-                      }`}>
+                      <span
+                        className={`px-3 py-1 rounded-full text-[10px] font-bold uppercase tracking-widest ${
+                          item.type === "bug"
+                            ? "bg-red-500/10 text-red-500"
+                            : "bg-[#00A388]/10 text-[#00A388]"
+                        }`}
+                      >
                         {item.type}
                       </span>
-                      <span className={`px-3 py-1 rounded-full text-[10px] font-bold uppercase tracking-widest ${
-                        item.status === 'resolved'
-                          ? 'bg-emerald-500/10 text-emerald-500'
-                          : item.status === 'in-progress'
-                          ? 'bg-amber-500/10 text-amber-500'
-                          : 'bg-neutral-800 text-neutral-400'
-                      }`}>
-                        {item.status || 'pending'}
+                      <span
+                        className={`px-3 py-1 rounded-full text-[10px] font-bold uppercase tracking-widest ${
+                          item.status === "resolved"
+                            ? "bg-emerald-500/10 text-emerald-500"
+                            : item.status === "in-progress"
+                            ? "bg-amber-500/10 text-amber-500"
+                            : "bg-neutral-800 text-neutral-400"
+                        }`}
+                      >
+                        {item.status || "pending"}
                       </span>
                     </div>
                   </div>
 
-                  <p className="text-neutral-300 leading-relaxed mb-4">{item.content}</p>
+                  <p className="text-neutral-300 leading-relaxed mb-4">
+                    {item.content}
+                  </p>
 
-                  {item.status === 'resolved' && (
+                  {item.status === "resolved" && (
                     <div className="p-4 bg-emerald-500/5 border border-emerald-500/20 rounded-xl flex items-center gap-3 text-emerald-500 text-sm font-bold">
                       <CheckCircle2 className="w-5 h-5 shrink-0" />
                       This issue has been resolved by the engineering team.
                     </div>
                   )}
 
-                  {item.aiSuggestion && item.status !== 'resolved' && (
+                  {item.aiSuggestion && item.status !== "resolved" && (
                     <div className="mt-4 p-4 bg-[#00A388]/5 border border-[#00A388]/20 rounded-xl">
                       <div className="flex items-center gap-2 text-[#00A388] mb-2">
                         <BrainCircuit className="w-4 h-4" />
-                        <span className="text-xs font-bold uppercase tracking-widest">Update from Engineering</span>
+                        <span className="text-xs font-bold uppercase tracking-widest">
+                          Update from Engineering
+                        </span>
                       </div>
                       <p className="text-sm text-neutral-400 italic">
-                        {item.aiSuggestion.split('---').pop()?.trim()}
+                        {item.aiSuggestion.split("---").pop()?.trim()}
                       </p>
                     </div>
                   )}
@@ -402,14 +529,34 @@ export default function ClientPortal() {
               {myFeedbacks.length === 0 && (
                 <div className="py-24 text-center bg-[#0D0D0D] border border-dashed border-[#1A1A1A] rounded-[2rem]">
                   <Clock className="w-14 h-14 text-neutral-800 mx-auto mb-4" />
-                  <p className="text-neutral-500 font-bold text-lg">No feedback yet</p>
-                  <p className="text-neutral-700 text-sm mt-1">Submit your first feedback above</p>
+                  <p className="text-neutral-500 font-bold text-lg">
+                    No feedback yet
+                  </p>
+                  <p className="text-neutral-700 text-sm mt-1">
+                    Submit your first feedback above
+                  </p>
                 </div>
               )}
             </div>
           </>
         )}
       </main>
+
+      {/* Preview Annotator */}
+      <AnimatePresence>
+        {showPreview && showPreview.previewUrl && (
+          <PreviewAnnotator
+            previewUrl={showPreview.previewUrl}
+            projectId={showPreview.id}
+            projectName={showPreview.name}
+            userName={
+              user?.displayName || user?.email?.split("@")[0] || "Client"
+            }
+            onClose={() => setShowPreview(null)}
+            onSubmitFeedback={handlePreviewFeedback}
+          />
+        )}
+      </AnimatePresence>
     </div>
   );
 }
