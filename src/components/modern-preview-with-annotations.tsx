@@ -1,15 +1,15 @@
 "use client";
 
 import {
-    Check,
-    Loader2,
-    MessageSquare,
-    MousePointer2,
-    Send,
-    Trash2,
-    X,
+  Check,
+  Loader2,
+  MessageSquare,
+  MousePointer2,
+  Send,
+  Trash2,
+  X,
 } from "lucide-react";
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 
 interface Annotation {
   id: number;
@@ -69,6 +69,12 @@ export default function ModernPreviewWithAnnotations({
   const [annotationComment, setAnnotationComment] = useState("");
   const [showSuccess, setShowSuccess] = useState(false);
 
+  const sendMessageToIframe = useCallback((message: any) => {
+    if (iframeRef.current?.contentWindow) {
+      iframeRef.current.contentWindow.postMessage(message, "*");
+    }
+  }, []);
+
   // Message handler for communication with widget
   useEffect(() => {
     const handleMessage = (event: MessageEvent) => {
@@ -83,23 +89,37 @@ export default function ModernPreviewWithAnnotations({
         setIsPanelOpen(true);
       } else if (event.data.type === "SCREENSHOT_CAPTURED") {
         console.log("📸 Screenshot captured successfully");
+        console.log(
+          "📸 Screenshot data:",
+          event.data.data?.screenshot?.substring(0, 100)
+        );
         setScreenshotData(event.data.data);
         setIsCapturing(false);
       } else if (event.data.type === "SCREENSHOT_ERROR") {
-        // Silently catch the error (like unsupported oklch CSS) so Next.js dev server doesn't show a red overlay
+        console.log("❌ Screenshot error:", event.data.error);
         setIsCapturing(false);
+      } else if (event.data.type === "SAVE_FEEDBACK_SUCCESS") {
+        console.log("✅ Feedback saved with ID:", event.data.feedbackId);
+        setIsSaving(false);
+        setShowSuccess(true);
+        setTimeout(() => {
+          setShowSuccess(false);
+          setAnnotations([]);
+          setScreenshotData(null);
+          setAnnotationMode(false);
+          setIsPanelOpen(false);
+          sendMessageToIframe({ type: "DEACTIVATE_ANNOTATION_MODE" });
+        }, 2000);
+      } else if (event.data.type === "SAVE_FEEDBACK_ERROR") {
+        console.error("❌ Save error:", event.data.error);
+        setIsSaving(false);
+        alert("Failed to save feedback: " + event.data.error);
       }
     };
 
     window.addEventListener("message", handleMessage);
     return () => window.removeEventListener("message", handleMessage);
-  }, []);
-
-  const sendMessageToIframe = (message: any) => {
-    if (iframeRef.current?.contentWindow) {
-      iframeRef.current.contentWindow.postMessage(message, "*");
-    }
-  };
+  }, [sendMessageToIframe]);
 
   const toggleAnnotationMode = () => {
     const newMode = !annotationMode;
@@ -114,14 +134,6 @@ export default function ModernPreviewWithAnnotations({
       setIsPanelOpen(true);
     }
   };
-
-  useEffect(() => {
-    if (isCapturePending && !isCapturing) {
-      setIsCapturePending(false);
-      handleSaveFeedback();
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [isCapturing, isCapturePending]);
 
   const submitAnnotation = () => {
     if (annotationComment.trim()) {
@@ -154,7 +166,6 @@ export default function ModernPreviewWithAnnotations({
           updatedAnnotations.length
         );
         setIsCapturing(true);
-        setIsCapturePending(true);
         sendMessageToIframe({
           type: "CAPTURE_SCREENSHOT",
           annotations: updatedAnnotations.map((a) => ({
@@ -186,8 +197,13 @@ export default function ModernPreviewWithAnnotations({
     if (annotations.length === 0) return;
 
     setIsSaving(true);
-    try {
-      await onSave({
+    console.log("💾 Sending save request to widget...");
+
+    // Send save request to widget - it will handle Firestore directly
+    sendMessageToIframe({
+      type: "SAVE_FEEDBACK",
+      data: {
+        projectId,
         annotations,
         screenshot: screenshotData?.screenshot || "",
         pageUrl: screenshotData?.url || websiteUrl,
@@ -195,24 +211,8 @@ export default function ModernPreviewWithAnnotations({
           viewport: screenshotData?.viewport || null,
           timestamp: screenshotData?.timestamp || new Date().toISOString(),
         },
-      });
-
-      // Show success message
-      setShowSuccess(true);
-      setTimeout(() => {
-        setShowSuccess(false);
-        // Reset after successful save
-        setAnnotations([]);
-        setScreenshotData(null);
-        setAnnotationMode(false);
-        setIsPanelOpen(false);
-        sendMessageToIframe({ type: "DEACTIVATE_ANNOTATION_MODE" });
-      }, 2000);
-    } catch (error) {
-      console.error("Error saving feedback:", error);
-    } finally {
-      setIsSaving(false);
-    }
+      },
+    });
   };
 
   const deleteAnnotation = (id: number) => {
@@ -267,6 +267,7 @@ export default function ModernPreviewWithAnnotations({
           src={websiteUrl}
           className="w-full h-full border-0"
           title="Website Preview"
+          allow="display-capture"
         />
 
         {/* Floating Action Button (FAB) - Always visible bottom right */}
@@ -281,10 +282,10 @@ export default function ModernPreviewWithAnnotations({
         <div
           className={`fixed top-0 right-0 h-full bg-slate-800 shadow-2xl border-l border-slate-700 transition-all duration-300 ease-in-out z-40 ${
             isPanelOpen ? "w-96" : "w-0"
-          } overflow-hidden`}
+          } overflow-hidden flex flex-col`}
         >
           {/* Panel Header */}
-          <div className="p-6 border-b border-slate-700 bg-gradient-to-br from-slate-900 to-slate-800">
+          <div className="p-6 border-b border-slate-700 bg-gradient-to-br from-slate-900 to-slate-800 flex-shrink-0">
             <div className="flex items-center justify-between mb-4">
               <h3 className="text-lg font-semibold text-white">
                 Feedback Panel
@@ -322,31 +323,33 @@ export default function ModernPreviewWithAnnotations({
             </div>
           </div>
 
-          {/* Annotations List */}
-          <div className="flex-1 overflow-y-auto p-6 space-y-3 max-h-[300px]">
-            {annotations.length === 0 ? (
-              <div className="text-center py-12">
-                <MessageSquare className="w-12 h-12 text-gray-600 mx-auto mb-3" />
-                <p className="text-sm text-gray-400">No annotations yet</p>
-                <p className="text-xs text-gray-500 mt-1">
-                  Click on the page to start
-                </p>
-              </div>
-            ) : (
-              annotations.map((annotation) => (
-                <div
-                  key={annotation.id}
-                  className="group bg-slate-900 rounded-lg p-4 border border-slate-700 hover:border-teal-500 hover:shadow-lg transition-all"
-                >
-                  <div className="flex items-start gap-3">
-                    <div className="w-7 h-7 rounded-full bg-teal-500 text-white flex items-center justify-center font-semibold text-xs flex-shrink-0">
-                      {annotation.number}
-                    </div>
-                    <div className="flex-1 min-w-0">
-                      <p className="text-sm text-gray-200 break-words">
-                        {annotation.comment}
-                      </p>
-                      <p className="text-xs text-gray-500 mt-1">
+          {/* Scrollable Content Area */}
+          <div className="flex-1 overflow-y-auto">
+            {/* Annotations List */}
+            <div className="p-6 space-y-3">
+              {annotations.length === 0 ? (
+                <div className="text-center py-12">
+                  <MessageSquare className="w-12 h-12 text-gray-600 mx-auto mb-3" />
+                  <p className="text-sm text-gray-400">No annotations yet</p>
+                  <p className="text-xs text-gray-500 mt-1">
+                    Click on the page to start
+                  </p>
+                </div>
+              ) : (
+                annotations.map((annotation) => (
+                  <div
+                    key={annotation.id}
+                    className="group bg-slate-900 rounded-lg p-4 border border-slate-700 hover:border-teal-500 hover:shadow-lg transition-all"
+                  >
+                    <div className="flex items-start gap-3">
+                      <div className="w-7 h-7 rounded-full bg-teal-500 text-white flex items-center justify-center font-semibold text-xs flex-shrink-0">
+                        {annotation.number}
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <p className="text-sm text-gray-200 break-words">
+                          {annotation.comment}
+                        </p>
+                        <p className="text-xs text-gray-500 mt-1">
                         Position: {annotation.x.toFixed(1)}%,{" "}
                         {annotation.y.toFixed(1)}%
                       </p>
@@ -361,10 +364,25 @@ export default function ModernPreviewWithAnnotations({
                 </div>
               ))
             )}
+            </div>
+
+            {/* Screenshot Preview */}
+            {screenshotData && (
+              <div className="p-6 border-t border-slate-700 bg-slate-900">
+                <p className="text-xs font-medium text-gray-400 mb-2">
+                  Screenshot Preview
+                </p>
+                <img
+                  src={screenshotData.screenshot}
+                  alt="Screenshot"
+                  className="w-full h-32 object-cover rounded-lg border border-slate-700"
+                />
+              </div>
+            )}
           </div>
 
-          {/* ALWAYS VISIBLE INPUT SECTION */}
-          <div className="p-6 border-t border-slate-700 bg-slate-900">
+          {/* ALWAYS VISIBLE INPUT SECTION - Fixed at bottom */}
+          <div className="p-6 border-t border-slate-700 bg-slate-900 flex-shrink-0">
             <div className="mb-4">
               <label className="block text-sm font-semibold text-white mb-2">
                 💬 Add Comment to Annotation #{annotations.length + 1}
@@ -400,29 +418,34 @@ export default function ModernPreviewWithAnnotations({
             </button>
           </div>
 
-          {/* Screenshot Preview */}
-          {screenshotData && (
-            <div className="p-6 border-t border-slate-700 bg-slate-900">
-              <p className="text-xs font-medium text-gray-400 mb-2">
-                Screenshot Preview
-              </p>
-              <img
-                src={screenshotData.screenshot}
-                alt="Screenshot"
-                className="w-full h-32 object-cover rounded-lg border border-slate-700"
-              />
-            </div>
-          )}
-
-          {/* Bottom Actions - Removed manual save, auto-saves now */}
-          <div className="p-6 border-t border-slate-700 bg-slate-800">
-            {showSuccess && (
+          {/* Bottom Actions - Save Feedback - Fixed at bottom */}
+          <div className="p-6 border-t border-slate-700 bg-slate-800 flex-shrink-0">
+            {showSuccess ? (
               <div className="flex items-center justify-center gap-2 text-green-400 py-3">
                 <Check className="w-5 h-5" />
                 <span className="text-sm font-medium">
                   Feedback saved successfully!
                 </span>
               </div>
+            ) : (
+              <button
+                onClick={handleSaveFeedback}
+                disabled={annotations.length === 0 || isSaving}
+                className="w-full flex items-center justify-center gap-2 px-6 py-4 bg-gradient-to-r from-teal-500 to-cyan-600 text-white rounded-lg font-bold text-sm hover:from-teal-600 hover:to-cyan-700 disabled:opacity-50 disabled:cursor-not-allowed transition-all shadow-xl"
+              >
+                {isSaving ? (
+                  <>
+                    <Loader2 className="w-5 h-5 animate-spin" />
+                    Saving Feedback...
+                  </>
+                ) : (
+                  <>
+                    <Send className="w-5 h-5" />
+                    Save Feedback ({annotations.length} annotation
+                    {annotations.length !== 1 ? "s" : ""})
+                  </>
+                )}
+              </button>
             )}
           </div>
         </div>

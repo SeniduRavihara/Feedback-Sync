@@ -11,6 +11,16 @@
 (function () {
   "use strict";
 
+  // Firebase Configuration - Client SDK
+  const firebaseConfig = {
+    apiKey: "AIzaSyBKd_AbCsMi8ohZZOl3Ht8e3F1MQAicJR0",
+    authDomain: "project-handler-b9687.firebaseapp.com",
+    projectId: "project-handler-b9687",
+    storageBucket: "project-handler-b9687.firebasestorage.app",
+    messagingSenderId: "124985382283",
+    appId: "1:124985382283:web:7025201715eda152cbcb8e",
+  };
+
   // Get project ID from script tag
   const scriptTag =
     document.currentScript ||
@@ -40,6 +50,41 @@
   let annotations = [];
   let annotationMode = false;
   let capturePromptOverlay = null;
+  let db = null;
+
+  // Initialize Firebase
+  function initFirebase() {
+    if (!window.firebase) {
+      console.log("📦 Loading Firebase SDK...");
+      loadFirebaseSDK(() => {
+        console.log("✅ Firebase SDK loaded");
+        const app = firebase.initializeApp(firebaseConfig);
+        db = firebase.firestore(app);
+        console.log("✅ Firestore initialized");
+      });
+    } else {
+      const app = firebase.initializeApp(firebaseConfig);
+      db = firebase.firestore(app);
+    }
+  }
+
+  // Load Firebase SDK dynamically
+  function loadFirebaseSDK(callback) {
+    const script1 = document.createElement("script");
+    script1.src =
+      "https://www.gstatic.com/firebasejs/9.22.0/firebase-app-compat.js";
+    script1.onload = () => {
+      const script2 = document.createElement("script");
+      script2.src =
+        "https://www.gstatic.com/firebasejs/9.22.0/firebase-firestore-compat.js";
+      script2.onload = callback;
+      document.head.appendChild(script2);
+    };
+    document.head.appendChild(script1);
+  }
+
+  // Initialize Firebase on load
+  initFirebase();
 
   // Notify parent dashboard that widget is ready
   function notifyReady() {
@@ -217,7 +262,8 @@
     title.style.margin = "0 0 12px 0";
 
     const desc = document.createElement("p");
-    desc.textContent = "Click the button below and then select this tab to capture your feedback perfectly.";
+    desc.textContent =
+      "Click the button below and then select this tab to capture your feedback perfectly.";
     desc.style.fontSize = "14px";
     desc.style.color = "#aaa";
     desc.style.marginBottom = "20px";
@@ -236,7 +282,7 @@
       font-size: 16px;
     `;
 
-    btn.onclick = function() {
+    btn.onclick = function () {
       capturePromptOverlay.remove();
       capturePromptOverlay = null;
       captureScreenshot();
@@ -256,17 +302,19 @@
       document.querySelectorAll(".feedback-annotation-marker")
     );
     if (overlay) overlay.style.display = "none";
-    markers.forEach(function(m) { m.style.display = "none"; });
+    markers.forEach(function (m) {
+      m.style.display = "none";
+    });
 
     // Use native browser Screen Capture API — works perfectly regardless of CSS or CORS
     navigator.mediaDevices
       .getDisplayMedia({ video: { mediaSource: "screen" }, audio: false })
-      .then(function(stream) {
+      .then(function (stream) {
         var video = document.createElement("video");
         video.srcObject = stream;
         video.play();
 
-        video.onloadedmetadata = function() {
+        video.onloadedmetadata = function () {
           var canvas = document.createElement("canvas");
           canvas.width = video.videoWidth;
           canvas.height = video.videoHeight;
@@ -274,13 +322,17 @@
           ctx.drawImage(video, 0, 0);
 
           // Stop the stream immediately after capturing one frame
-          stream.getTracks().forEach(function(t) { t.stop(); });
+          stream.getTracks().forEach(function (t) {
+            t.stop();
+          });
 
           var screenshot = canvas.toDataURL("image/jpeg", 0.9);
 
           // Restore overlay and markers
           if (overlay) overlay.style.display = "block";
-          markers.forEach(function(m) { m.style.display = "flex"; });
+          markers.forEach(function (m) {
+            m.style.display = "flex";
+          });
 
           window.parent.postMessage(
             {
@@ -295,20 +347,24 @@
                   scrollX: window.pageXOffset,
                   scrollY: window.pageYOffset,
                 },
-                annotations: (requestedAnnotations || annotations).map(function(a) {
-                  return { id: a.id, x: a.x, y: a.y };
-                }),
+                annotations: (requestedAnnotations || annotations).map(
+                  function (a) {
+                    return { id: a.id, x: a.x, y: a.y };
+                  }
+                ),
               },
             },
             "*"
           );
         };
       })
-      .catch(function(error) {
+      .catch(function (error) {
         // User cancelled or browser denied permission
         // Restore overlay and markers
         if (overlay) overlay.style.display = "block";
-        markers.forEach(function(m) { m.style.display = "flex"; });
+        markers.forEach(function (m) {
+          m.style.display = "flex";
+        });
 
         window.parent.postMessage(
           {
@@ -320,6 +376,70 @@
       });
   }
 
+  // Save feedback directly to Firestore
+  function saveFeedbackToFirestore(feedbackData) {
+    console.log("💾 Save request received", feedbackData);
+    
+    // Wait for Firebase to be ready
+    function attemptSave(retries) {
+      if (!window.firebase || !db) {
+        if (retries > 0) {
+          console.log("⏳ Waiting for Firebase... retries left:", retries);
+          setTimeout(function() {
+            attemptSave(retries - 1);
+          }, 500);
+        } else {
+          console.error("❌ Firestore not initialized after waiting");
+          window.parent.postMessage(
+            { type: "SAVE_FEEDBACK_ERROR", error: "Firestore failed to initialize" },
+            "*"
+          );
+        }
+        return;
+      }
+
+      console.log("💾 Saving feedback to Firestore...");
+
+      db.collection("feedback")
+        .add({
+          projectId: feedbackData.projectId,
+          pageUrl: feedbackData.pageUrl || window.location.href,
+          annotations: feedbackData.annotations,
+          screenshot: feedbackData.screenshot || "",
+          clientId: feedbackData.clientId || "widget_user",
+          clientName: feedbackData.clientName || "Anonymous",
+          metadata: {
+            viewport: feedbackData.metadata?.viewport || {},
+            timestamp: new Date().toISOString(),
+            userAgent: navigator.userAgent,
+          },
+          status: "new",
+          createdAt: firebase.firestore.FieldValue.serverTimestamp(),
+        })
+        .then(function (docRef) {
+          console.log("✅ Feedback saved with ID:", docRef.id);
+          window.parent.postMessage(
+            {
+              type: "SAVE_FEEDBACK_SUCCESS",
+              feedbackId: docRef.id,
+            },
+            "*"
+          );
+        })
+        .catch(function (error) {
+          console.error("❌ Error saving feedback:", error);
+          window.parent.postMessage(
+            {
+              type: "SAVE_FEEDBACK_ERROR",
+              error: error.message,
+            },
+            "*"
+          );
+        });
+    }
+    
+    attemptSave(10); // Try up to 10 times (5 seconds)
+  }
 
   // Listen for messages from parent dashboard
   window.addEventListener("message", function (event) {
@@ -342,8 +462,14 @@
         break;
 
       case "CAPTURE_SCREENSHOT":
-        console.log("📸 Widget: Capture request received. Showing prompt for user gesture.");
+        console.log(
+          "📸 Widget: Capture request received. Showing prompt for user gesture."
+        );
         showCapturePrompt();
+        break;
+
+      case "SAVE_FEEDBACK":
+        saveFeedbackToFirestore(message.data);
         break;
 
       case "PING":

@@ -47,6 +47,12 @@ export default function PreviewFeedbackPage({
     metadata: any;
   }) => {
     try {
+      console.log("📤 Sending feedback to API...", {
+        projectId,
+        annotationCount: data.annotations.length,
+        hasScreenshot: !!data.screenshot,
+      });
+
       const response = await fetch("/api/feedback/save", {
         method: "POST",
         headers: {
@@ -59,13 +65,30 @@ export default function PreviewFeedbackPage({
           pageUrl: data.pageUrl,
           metadata: data.metadata,
           clientId: user?.uid || "unknown_user",
-          clientName: user?.displayName || user?.email?.split('@')[0] || "Guest Reviewer",
+          clientName:
+            user?.displayName || user?.email?.split("@")[0] || "Guest Reviewer",
         }),
       });
 
+      console.log("📡 Response status:", response.status, response.statusText);
+
       if (!response.ok) {
-        const error = await response.json();
-        throw new Error(error.error || "Failed to save feedback");
+        const contentType = response.headers.get("content-type");
+        console.error("❌ Response not OK. Content-Type:", contentType);
+
+        if (contentType?.includes("application/json")) {
+          const error = await response.json();
+          throw new Error(error.error || "Failed to save feedback");
+        } else {
+          const text = await response.text();
+          console.error(
+            "❌ Server returned HTML/text instead of JSON:",
+            text.substring(0, 200)
+          );
+          throw new Error(
+            `Server error: ${response.status} - Check server logs`
+          );
+        }
       }
 
       const result = await response.json();
@@ -75,7 +98,12 @@ export default function PreviewFeedbackPage({
       // Reset after 3 seconds
       setTimeout(() => setSavedSuccess(false), 3000);
     } catch (error) {
-      console.error("Failed to save feedback:", error);
+      console.error("❌ Failed to save feedback:", error);
+      alert(
+        `Failed to save feedback: ${
+          error instanceof Error ? error.message : "Unknown error"
+        }`
+      );
       throw error;
     }
   };
