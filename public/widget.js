@@ -93,12 +93,20 @@
       console.log("📦 Loading Firebase SDK...");
       await loadFirebaseSDK();
       console.log("✅ Firebase SDK loaded");
+      console.log("Firebase available:", !!window.firebase);
 
       const app = firebase.initializeApp(firebaseConfig);
+      console.log("✅ Firebase app initialized");
+      
       db = firebase.firestore(app);
+      console.log("✅ Firestore initialized:", !!db);
+      
       storage = firebase.storage(app);
+      console.log("✅ Storage initialized:", !!storage);
+      console.log("Storage bucket:", storage.app.options.storageBucket);
+      
       firebaseReady = true;
-      console.log("✅ Firestore and Storage initialized and ready");
+      console.log("✅ All Firebase services ready");
     } catch (error) {
       console.error("❌ Firebase initialization failed:", error);
       firebaseReady = false;
@@ -401,24 +409,31 @@
   // Upload screenshot to Firebase Storage
   async function uploadScreenshot(base64Data, feedbackId) {
     if (!base64Data || !storage) {
+      console.log("⚠️ No screenshot or storage not ready");
+      console.log("Has screenshot:", !!base64Data);
+      console.log("Storage ready:", !!storage);
       return null;
     }
 
     try {
       console.log("📤 Uploading screenshot to Storage...");
-
-      // Convert base64 to blob
-      const base64Response = await fetch(base64Data);
-      const blob = await base64Response.blob();
+      console.log("Data length:", base64Data.length);
+      console.log("Feedback ID:", feedbackId);
 
       // Create storage reference
       const timestamp = new Date().getTime();
-      const storageRef = storage.ref(
-        `feedback-screenshots/${feedbackId}_${timestamp}.jpg`
-      );
+      const path = `feedback-screenshots/${feedbackId}_${timestamp}.jpg`;
+      console.log("Upload path:", path);
+      
+      const storageRef = storage.ref(path);
+      console.log("Storage ref created:", !!storageRef);
 
-      // Upload the blob
-      const snapshot = await storageRef.put(blob);
+      // Upload base64 string directly (data_url format)
+      console.log("Starting putString...");
+      const snapshot = await storageRef.putString(base64Data, 'data_url', {
+        contentType: 'image/jpeg'
+      });
+      console.log("✅ Upload complete, getting URL...");
 
       // Get download URL
       const downloadURL = await snapshot.ref.getDownloadURL();
@@ -427,6 +442,15 @@
       return downloadURL;
     } catch (error) {
       console.error("❌ Screenshot upload failed:", error);
+      console.error("Error code:", error.code);
+      console.error("Error message:", error.message);
+      console.error("Full error:", JSON.stringify(error, null, 2));
+      
+      // If it's a permission error, log it clearly
+      if (error.code === 'storage/unauthorized') {
+        console.error("🚫 Storage rules deny upload. Check Firebase Console > Storage > Rules");
+      }
+      
       return null;
     }
   }
