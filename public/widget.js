@@ -483,13 +483,22 @@
 
       console.log("💾 Creating feedback document...");
 
-      // First create the document to get an ID
+      // Upload screenshot FIRST if available
+      let screenshotUrl = "";
+      if (feedbackData.screenshot) {
+        console.log("📤 Uploading screenshot before creating document...");
+        // Generate a temporary ID for the upload path
+        const tempId = `temp_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+        screenshotUrl = await uploadScreenshot(feedbackData.screenshot, tempId);
+        console.log("Screenshot upload result:", screenshotUrl || "FAILED");
+      }
+
+      // NOW create the document with the screenshot URL (NOT base64)
       const docRef = await db.collection("feedback").add({
         projectId: feedbackData.projectId,
         pageUrl: feedbackData.pageUrl || window.location.href,
         annotations: feedbackData.annotations || [],
-        screenshot: "", // Will be updated after upload
-        screenshotUrl: "", // Will be set after upload
+        screenshotUrl: screenshotUrl || "", // Only save the URL, NOT base64
         clientId: feedbackData.clientId || "widget_user",
         clientName: feedbackData.clientName || "Anonymous",
         metadata: {
@@ -502,23 +511,7 @@
       });
 
       console.log("✅ Feedback document created with ID:", docRef.id);
-
-      // Upload screenshot if available
-      let screenshotUrl = "";
-      if (feedbackData.screenshot) {
-        screenshotUrl = await uploadScreenshot(
-          feedbackData.screenshot,
-          docRef.id
-        );
-
-        // Update document with screenshot URL
-        if (screenshotUrl) {
-          await docRef.update({
-            screenshotUrl: screenshotUrl,
-          });
-          console.log("✅ Screenshot URL updated in document");
-        }
-      }
+      console.log("✅ Screenshot URL saved:", screenshotUrl || "No screenshot");
 
       console.log("✅ Feedback fully saved with ID:", docRef.id);
       window.parent.postMessage(
