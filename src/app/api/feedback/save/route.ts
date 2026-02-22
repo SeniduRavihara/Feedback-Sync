@@ -7,9 +7,13 @@ import { v4 as uuidv4 } from "uuid";
 async function uploadScreenshotToStorage(
   base64Data: string
 ): Promise<string | null> {
-  if (!base64Data) return null;
+  if (!base64Data) {
+    console.warn("⚠️ No screenshot data provided to upload function");
+    return null;
+  }
 
   try {
+    console.log("📸 Attempting to upload screenshot. Base64 length:", base64Data.length);
     // Strip "data:image/jpeg;base64," prefix
     const matches = base64Data.match(/^data:(.+);base64,(.+)$/);
     if (!matches) return null;
@@ -23,10 +27,15 @@ async function uploadScreenshotToStorage(
     const bucket = adminStorage.bucket();
     const file = bucket.file(fileName);
 
+    console.log("🚀 Uploading to bucket:", bucket.name, "as file:", fileName);
+    console.log("📦 Buffer size:", imageBuffer.length, "bytes");
+
     await file.save(imageBuffer, {
       metadata: { contentType: mimeType },
-      public: true, // Make publicly readable
+      public: true, 
     });
+
+    console.log("✅ File saved to Storage successfully");
 
     // Return the public URL
     const publicUrl = `https://storage.googleapis.com/${bucket.name}/${fileName}`;

@@ -39,6 +39,7 @@
   let annotationOverlay = null;
   let annotations = [];
   let annotationMode = false;
+  let capturePromptOverlay = null;
 
   // Notify parent dashboard that widget is ready
   function notifyReady() {
@@ -190,6 +191,63 @@
     );
   }
 
+  // Show a prompt to the user to capture the screen (required for browser security gesture)
+  function showCapturePrompt() {
+    if (capturePromptOverlay) return;
+
+    capturePromptOverlay = document.createElement("div");
+    capturePromptOverlay.style.cssText = `
+      position: fixed;
+      top: 50%;
+      left: 50%;
+      transform: translate(-50%, -50%);
+      background: #1e1e1e;
+      color: white;
+      padding: 24px;
+      border-radius: 12px;
+      box-shadow: 0 10px 40px rgba(0,0,0,0.5);
+      z-index: 2147483647;
+      text-align: center;
+      font-family: sans-serif;
+      width: 320px;
+    `;
+
+    const title = document.createElement("h3");
+    title.textContent = "Confirm Screenshot";
+    title.style.margin = "0 0 12px 0";
+
+    const desc = document.createElement("p");
+    desc.textContent = "Click the button below and then select this tab to capture your feedback perfectly.";
+    desc.style.fontSize = "14px";
+    desc.style.color = "#aaa";
+    desc.style.marginBottom = "20px";
+
+    const btn = document.createElement("button");
+    btn.textContent = "Take Screenshot Now";
+    btn.style.cssText = `
+      background: #FF6B6B;
+      color: white;
+      border: none;
+      padding: 12px 24px;
+      border-radius: 6px;
+      font-weight: bold;
+      cursor: pointer;
+      width: 100%;
+      font-size: 16px;
+    `;
+
+    btn.onclick = function() {
+      capturePromptOverlay.remove();
+      capturePromptOverlay = null;
+      captureScreenshot();
+    };
+
+    capturePromptOverlay.appendChild(title);
+    capturePromptOverlay.appendChild(desc);
+    capturePromptOverlay.appendChild(btn);
+    document.body.appendChild(capturePromptOverlay);
+  }
+
   // Capture screenshot using native browser Screen Capture API
   function captureScreenshot(requestedAnnotations) {
     // Hide overlay and markers for a clean screenshot
@@ -284,7 +342,8 @@
         break;
 
       case "CAPTURE_SCREENSHOT":
-        captureScreenshot();
+        console.log("📸 Widget: Capture request received. Showing prompt for user gesture.");
+        showCapturePrompt();
         break;
 
       case "PING":
