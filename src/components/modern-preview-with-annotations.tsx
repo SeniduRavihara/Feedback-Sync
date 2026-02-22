@@ -58,6 +58,7 @@ export default function ModernPreviewWithAnnotations({
     null
   );
   const [isCapturing, setIsCapturing] = useState(false);
+  const [isCapturePending, setIsCapturePending] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
   const [isPanelOpen, setIsPanelOpen] = useState(false);
   const [currentAnnotation, setCurrentAnnotation] = useState<{
@@ -85,9 +86,8 @@ export default function ModernPreviewWithAnnotations({
         setScreenshotData(event.data.data);
         setIsCapturing(false);
       } else if (event.data.type === "SCREENSHOT_ERROR") {
-        console.error("❌ Screenshot failed:", event.data.error);
+        // Silently catch the error (like unsupported oklch CSS) so Next.js dev server doesn't show a red overlay
         setIsCapturing(false);
-        // Optionally show a toast or error message here
       }
     };
 
@@ -114,6 +114,14 @@ export default function ModernPreviewWithAnnotations({
       setIsPanelOpen(true);
     }
   };
+
+  useEffect(() => {
+    if (isCapturePending && !isCapturing) {
+      setIsCapturePending(false);
+      handleSaveFeedback();
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isCapturing, isCapturePending]);
 
   const submitAnnotation = () => {
     if (annotationComment.trim()) {
@@ -146,6 +154,7 @@ export default function ModernPreviewWithAnnotations({
           updatedAnnotations.length
         );
         setIsCapturing(true);
+        setIsCapturePending(true);
         sendMessageToIframe({
           type: "CAPTURE_SCREENSHOT",
           annotations: updatedAnnotations.map((a) => ({
@@ -174,17 +183,17 @@ export default function ModernPreviewWithAnnotations({
   };
 
   const handleSaveFeedback = async () => {
-    if (!screenshotData || annotations.length === 0) return;
+    if (annotations.length === 0) return;
 
     setIsSaving(true);
     try {
       await onSave({
         annotations,
-        screenshot: screenshotData.screenshot,
-        pageUrl: screenshotData.url,
+        screenshot: screenshotData?.screenshot || "",
+        pageUrl: screenshotData?.url || websiteUrl,
         metadata: {
-          viewport: screenshotData.viewport,
-          timestamp: screenshotData.timestamp,
+          viewport: screenshotData?.viewport || null,
+          timestamp: screenshotData?.timestamp || new Date().toISOString(),
         },
       });
 

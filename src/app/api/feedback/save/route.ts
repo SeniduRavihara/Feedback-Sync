@@ -20,12 +20,7 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    if (!screenshot) {
-      return NextResponse.json(
-        { error: "Screenshot is required" },
-        { status: 400 }
-      );
-    }
+
 
     if (!pageUrl) {
       return NextResponse.json(
