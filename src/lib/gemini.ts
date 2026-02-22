@@ -1,10 +1,10 @@
-import { GoogleGenAI, Type } from "@google/genai";
+import { GoogleGenAI } from "@google/genai";
 
 const ai = new GoogleGenAI({ apiKey: process.env.NEXT_PUBLIC_GEMINI_API_KEY! });
 
 export async function analyzeFeedback(feedback: string, codebase: string) {
-  const model = ai.models.generateContent({
-    model: "gemini-3-flash-preview",
+  const response = await ai.models.generateContent({
+    model: "gemini-2.5-flash",
     contents: `
       Feedback: ${feedback}
       
@@ -20,21 +20,24 @@ export async function analyzeFeedback(feedback: string, codebase: string) {
     `,
   });
 
-  const response = await model;
   return response.text;
 }
 
 export async function transcribeAudio(base64Audio: string) {
   const response = await ai.models.generateContent({
-    model: "gemini-2.5-flash-native-audio-preview-09-2025",
+    model: "gemini-2.0-flash", // We fall back to 2.0 flash since native audio model is restricted
     contents: [
       {
-        inlineData: {
-          mimeType: "audio/pcm;rate=16000",
-          data: base64Audio,
-        },
-      },
-      { text: "Transcribe this audio. If it is in Sinhala, transcribe it in Sinhala and also provide an English translation." },
+        parts: [
+          {
+            inlineData: {
+              mimeType: "audio/webm",
+              data: base64Audio,
+            },
+          },
+          { text: "Transcribe this audio. If it is in Sinhala, transcribe it in Sinhala and also provide an English translation." }
+        ]
+      }
     ],
   });
 

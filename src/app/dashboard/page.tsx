@@ -58,7 +58,7 @@ function Toast({ message, type, onClose }: { message: string; type: 'success' | 
 
 export default function Dashboard() {
   const { user, role, loading: authLoading, fetchRole } = useAuth();
-  const [activeTab, setActiveTab] = useState<'projects' | 'clients'>('projects');
+  const [activeTab, setActiveTab] = useState<'projects' | 'clients' | 'insights' | 'settings'>('projects');
   const [projects, setProjects] = useState<any[]>([]);
   const [feedbacks, setFeedbacks] = useState<any[]>([]);
   const [allClients, setAllClients] = useState<any[]>([]);
@@ -296,8 +296,8 @@ export default function Dashboard() {
               active={activeTab === 'clients'}
               onClick={() => setActiveTab('clients')}
             />
-            <NavItem icon={<BrainCircuit className="w-5 h-5" />} label="AI Insights" />
-            <NavItem icon={<Settings className="w-5 h-5" />} label="Settings" />
+            <NavItem icon={<BrainCircuit className="w-5 h-5" />} label="AI Insights" active={activeTab === 'insights'} onClick={() => setActiveTab('insights')} />
+            <NavItem icon={<Settings className="w-5 h-5" />} label="Settings" active={activeTab === 'settings'} onClick={() => setActiveTab('settings')} />
           </nav>
         </div>
 
@@ -324,7 +324,7 @@ export default function Dashboard() {
       {/* Main Content */}
       <main className="flex-1 overflow-y-auto p-10">
         <div className="max-w-6xl mx-auto">
-          {activeTab === 'projects' ? (
+          {activeTab === 'projects' && (
             <>
               <header className="flex items-center justify-between mb-10">
                 <div>
@@ -501,7 +501,9 @@ export default function Dashboard() {
                 )}
               </AnimatePresence>
             </>
-          ) : (
+          )}
+
+          {activeTab === 'clients' && (
             <>
               <header className="mb-10">
                 <h1 className="text-4xl font-display font-bold text-white mb-1">Clients</h1>
@@ -541,6 +543,34 @@ export default function Dashboard() {
                     <p className="text-neutral-500 font-bold text-lg">No clients yet</p>
                   </div>
                 )}
+              </div>
+            </>
+          )}
+
+          {activeTab === 'insights' && (
+            <>
+              <header className="mb-10">
+                <h1 className="text-4xl font-display font-bold text-white mb-1">AI Insights</h1>
+                <p className="text-neutral-500">Analytics and AI processing history</p>
+              </header>
+              <div className="py-24 text-center bg-[#0D0D0D] border border-dashed border-[#1A1A1A] rounded-[2rem]">
+                <BrainCircuit className="w-14 h-14 text-neutral-800 mx-auto mb-4" />
+                <p className="text-neutral-500 font-bold text-lg">AI Insights Coming Soon</p>
+                <p className="text-neutral-700 mt-1 text-sm">Detailed AI analytics will be available here.</p>
+              </div>
+            </>
+          )}
+
+          {activeTab === 'settings' && (
+            <>
+              <header className="mb-10">
+                <h1 className="text-4xl font-display font-bold text-white mb-1">Settings</h1>
+                <p className="text-neutral-500">Manage your profile and preferences</p>
+              </header>
+              <div className="py-24 text-center bg-[#0D0D0D] border border-dashed border-[#1A1A1A] rounded-[2rem]">
+                <Settings className="w-14 h-14 text-neutral-800 mx-auto mb-4" />
+                <p className="text-neutral-500 font-bold text-lg">Settings Coming Soon</p>
+                <p className="text-neutral-700 mt-1 text-sm">Account configuration will be available here.</p>
               </div>
             </>
           )}
