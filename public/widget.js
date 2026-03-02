@@ -451,7 +451,7 @@
   async function captureScreenshotInternal(requestedAnnotations) {
     if (!window.domtoimage) throw new Error("Screenshot library not ready");
 
-    // Hide overlay, markers, and control panels for clean screenshot
+    // Hide overlay and control panels for clean screenshot (but keep markers)
     const overlay = annotationOverlay;
     const markers = Array.from(document.querySelectorAll(".feedback-annotation-marker"));
     const panels = [];
@@ -459,18 +459,13 @@
     if (floatingBtn) panels.push(floatingBtn);
 
     if (overlay) overlay.style.display = "none";
-    markers.forEach(m => m.style.display = "none");
     panels.forEach(p => p.style.display = "none");
     
     try {
       // Capture the current viewport using dom-to-image
       const screenshot = await window.domtoimage.toJpeg(document.body, {
         quality: 0.8,
-        bgcolor: '#ffffff', // Guarantee background color
-        filter: function (node) {
-          // Optimization: Skip rendering the markers themselves just in case display:none failed
-          return node.className !== 'feedback-annotation-marker';
-        }
+        bgcolor: '#ffffff' // Guarantee background color
       });
 
       // Restore elements
