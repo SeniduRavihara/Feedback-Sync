@@ -56,23 +56,23 @@
   let controlPanel = null;
   let isCapturing = false;
 
-  // Load html2canvas library
-  function loadHtml2Canvas() {
+  // Load dom-to-image library (stable replacement for html2canvas)
+  function loadDomToImage() {
     return new Promise((resolve, reject) => {
-      if (window.html2canvas) {
+      if (window.domtoimage) {
         resolve();
         return;
       }
 
       const script = document.createElement("script");
       script.src =
-        "https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js";
+        "https://cdnjs.cloudflare.com/ajax/libs/dom-to-image/2.6.0/dom-to-image.min.js";
       script.onload = () => {
-        html2canvasLoaded = true;
-        console.log("✅ html2canvas loaded");
+        html2canvasLoaded = true; // keeping variable name for state consistency
+        console.log("✅ dom-to-image loaded");
         resolve();
       };
-      script.onerror = () => reject(new Error("Failed to load html2canvas"));
+      script.onerror = () => reject(new Error("Failed to load dom-to-image"));
       document.head.appendChild(script);
     });
   }
@@ -135,7 +135,7 @@
 
   // Initialize SDKs
   initFirebase();
-  loadHtml2Canvas();
+  loadDomToImage();
 
   // ----------------------------------------------------------------------
   // STANDALONE UI COMPONENTS
@@ -449,7 +449,7 @@
 
   // Internal Promise-based screenshot function for reuse
   async function captureScreenshotInternal(requestedAnnotations) {
-    if (!window.html2canvas) throw new Error("Screenshot library not ready");
+    if (!window.domtoimage) throw new Error("Screenshot library not ready");
 
     // Hide overlay, markers, and control panels for clean screenshot
     const overlay = annotationOverlay;
@@ -461,73 +461,23 @@
     if (overlay) overlay.style.display = "none";
     markers.forEach(m => m.style.display = "none");
     panels.forEach(p => p.style.display = "none");
-
-    // SANITIZATION: html2canvas crashes immediately if it encounters 'oklch' in styles
-    // We must temporarily replace them in the live DOM before capturing
-    const originalStyles = new Map();
     
     try {
-      // Find all elements and check their computed styles
-      const allElements = document.querySelectorAll('*');
-      allElements.forEach(el => {
-        // If the element has inline styles with oklch, save and replace
-        if (el.getAttribute('style') && el.getAttribute('style').includes('oklch')) {
-          originalStyles.set(el, el.getAttribute('style'));
-          // Extremely rudimentary replacement just to prevent crashes
-          const safeStyle = el.getAttribute('style').replace(/oklch\([^)]+\)/g, 'transparent');
-          el.setAttribute('style', safeStyle);
+      // Capture the current viewport using dom-to-image
+      const screenshot = await window.domtoimage.toJpeg(document.body, {
+        quality: 0.8,
+        bgcolor: '#ffffff', // Guarantee background color
+        filter: function (node) {
+          // Optimization: Skip rendering the markers themselves just in case display:none failed
+          return node.className !== 'feedback-annotation-marker';
         }
       });
 
-      // Capture the current viewport
-      const canvas = await html2canvas(document.body, {
-        allowTaint: true,
-        useCORS: true,
-        logging: false,
-        width: window.innerWidth,
-        height: window.innerHeight,
-        windowWidth: window.innerWidth,
-        windowHeight: window.innerHeight,
-        x: window.pageXOffset,
-        y: window.pageYOffset,
-        ignoreElements: function (element) { return false; },
-        onclone: function (clonedDoc) {
-          try {
-            // Also sanitize stylesheets in the cloned document
-            const styleSheets = clonedDoc.styleSheets;
-            for (let i = 0; i < styleSheets.length; i++) {
-              try {
-                const rules = styleSheets[i].cssRules || styleSheets[i].rules;
-                for (let j = 0; j < rules.length; j++) {
-                  const rule = rules[j];
-                  if (rule.style) {
-                    for (let prop of rule.style) {
-                      if (rule.style[prop] && rule.style[prop].includes("oklch")) {
-                        rule.style[prop] = "transparent"; // Fallback to prevent crash
-                      }
-                    }
-                  }
-                }
-              } catch (e) { continue; }
-            }
-          } catch (e) {
-            console.warn("Could not process stylesheets:", e);
-          }
-        },
-      });
-
-      // Restore elements and styles
+      // Restore elements
       if (overlay) overlay.style.display = "block";
       markers.forEach(m => m.style.display = "flex");
       if (!isInPreviewIframe && controlPanel) controlPanel.style.display = "flex";
-      
-      // Restore original inline styles
-      originalStyles.forEach((style, el) => {
-        el.setAttribute('style', style);
-      });
 
-      const screenshot = canvas.toDataURL("image/jpeg", 0.8);
-      
       return {
         screenshot: screenshot,
         url: window.location.href,
@@ -545,11 +495,6 @@
       if (overlay) overlay.style.display = "block";
       markers.forEach(m => m.style.display = "flex");
       if (!isInPreviewIframe && controlPanel) controlPanel.style.display = "flex";
-      
-      originalStyles.forEach((style, el) => {
-        el.setAttribute('style', style);
-      });
-      
       throw e;
     }
   }
