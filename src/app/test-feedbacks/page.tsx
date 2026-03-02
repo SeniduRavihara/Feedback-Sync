@@ -178,7 +178,7 @@ export default function TestFeedbacksPage() {
                         </div>
                         <div>
                            <span className="text-neutral-700">Screenshot: </span>
-                           {item.screenshot ? <span className="text-emerald-500">Present (Base64)</span> : <span className="text-red-500">Missing/Fallback</span>}
+                           {item.screenshot ? <span className="text-emerald-500">Present (Storage URL)</span> : <span className="text-red-500">Missing/Fallback</span>}
                         </div>
                      </div>
                   </div>
@@ -193,16 +193,16 @@ export default function TestFeedbacksPage() {
                      <ImageIcon className="w-3 h-3" /> Captured View
                    </h3>
                    <div className="flex-1 bg-black border border-[#242424] rounded-xl overflow-hidden relative flex items-center justify-center min-h-[200px]">
-                      {item.screenshot ? (
+                      {(item.screenshot || item.screenshotUrl) ? (
                         <div className="relative group w-full h-full flex flex-col">
                            <img 
-                             src={item.screenshot} 
+                             src={item.screenshot || item.screenshotUrl} 
                              alt="Feedback Screenshot" 
                              className="w-full h-full object-contain"
                            />
                            <div className="absolute inset-0 bg-black/60 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
                              <a 
-                               href={item.screenshot} 
+                               href={item.screenshot || item.screenshotUrl} 
                                download={`feedback-${item.id}.jpg`}
                                className="px-4 py-2 bg-[#00A388] text-white text-xs font-bold rounded-lg hover:bg-[#008f76] transition-colors"
                              >

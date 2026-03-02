@@ -5,34 +5,34 @@ import { RepoSelector } from "@/components/repo-selector";
 import { useAuth } from "@/hooks/use-auth";
 import { auth, db } from "@/lib/firebase";
 import {
-    addDoc,
-    collection,
-    doc,
-    getDoc,
-    getDocs,
-    onSnapshot,
-    query,
-    updateDoc,
-    where,
+  addDoc,
+  collection,
+  doc,
+  getDoc,
+  getDocs,
+  onSnapshot,
+  query,
+  updateDoc,
+  where,
 } from "firebase/firestore";
 import {
-    AlertCircle,
-    BrainCircuit,
-    Check,
-    CheckCircle2,
-    ChevronLeft,
-    ChevronRight,
-    Code2,
-    Eye,
-    Github,
-    LayoutDashboard,
-    Loader2,
-    LogOut,
-    MessageSquare,
-    Plus,
-    Settings,
-    Users,
-    X,
+  AlertCircle,
+  BrainCircuit,
+  Check,
+  CheckCircle2,
+  ChevronLeft,
+  ChevronRight,
+  Code2,
+  Eye,
+  Github,
+  LayoutDashboard,
+  Loader2,
+  LogOut,
+  MessageSquare,
+  Plus,
+  Settings,
+  Users,
+  X,
 } from "lucide-react";
 import { AnimatePresence, motion } from "motion/react";
 import { useRouter } from "next/navigation";
@@ -714,7 +714,7 @@ export default function Dashboard() {
                             )}
 
                             {/* Screenshot with Annotation */}
-                            {(feedback.screenshot ||
+                            {(feedback.screenshot || feedback.screenshotUrl ||
                               (feedback.pageUrl && feedback.position)) && (
                               <div className="mb-6 p-4 bg-[#080808] rounded-2xl border border-[#1A1A1A]">
                                 <div className="flex items-center justify-between mb-3">
@@ -739,9 +739,9 @@ export default function Dashboard() {
                                     </a>
                                   )}
                                 </div>
-                                {feedback.screenshot ? (
+                                {(feedback.screenshot || feedback.screenshotUrl) ? (
                                   <img
-                                    src={feedback.screenshot}
+                                    src={feedback.screenshot || feedback.screenshotUrl}
                                     alt={`Annotation #${feedback.annotationNumber}`}
                                     className="w-full h-auto rounded-xl border border-[#1A1A1A]"
                                   />
