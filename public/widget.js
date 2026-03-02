@@ -37,23 +37,24 @@
   const isInPreviewIframe =
     window.parent !== window && window.location !== window.parent.location;
 
-  // On live website: Do nothing (completely invisible)
-  if (!isInPreviewIframe) {
-    return;
-  }
-
-  // Only proceed if inside preview iframe
-  console.log("Feedback Widget: Activated in preview mode");
+  console.log(
+    "Feedback Widget: Activated in",
+    isInPreviewIframe ? "preview iframe mode" : "standalone mode"
+  );
 
   // State
   let annotationOverlay = null;
   let annotations = [];
   let annotationMode = false;
-  let capturePromptOverlay = null;
   let db = null;
   let storage = null;
   let firebaseReady = false;
   let html2canvasLoaded = false;
+  
+  // Standalone UI State
+  let floatingBtn = null;
+  let controlPanel = null;
+  let isCapturing = false;
 
   // Load html2canvas library
   function loadHtml2Canvas() {
@@ -115,48 +116,193 @@
       console.log("📦 Loading Firebase SDK...");
       await loadFirebaseSDK();
       console.log("✅ Firebase SDK loaded");
-      console.log("Firebase available:", !!window.firebase);
 
       const app = firebase.initializeApp(firebaseConfig);
-      console.log("✅ Firebase app initialized");
-
       db = firebase.firestore(app);
-      console.log("✅ Firestore initialized:", !!db);
-
       storage = firebase.storage(app);
-      console.log("✅ Storage initialized:", !!storage);
-      console.log("Storage bucket:", storage.app.options.storageBucket);
-
       firebaseReady = true;
       console.log("✅ All Firebase services ready");
+      
+      // If standalone, show the floating button once Firebase is ready
+      if (!isInPreviewIframe) {
+        createFloatingButton();
+      }
     } catch (error) {
       console.error("❌ Firebase initialization failed:", error);
       firebaseReady = false;
     }
   }
 
-  // Initialize Firebase on load
+  // Initialize SDKs
   initFirebase();
-  loadHtml2Canvas(); // Load html2canvas too
+  loadHtml2Canvas();
 
-  // Notify parent dashboard that widget is ready
-  function notifyReady() {
-    try {
-      window.parent.postMessage(
-        {
-          type: "FEEDBACK_WIDGET_READY",
-          projectId: projectId,
-          url: window.location.href,
-          timestamp: new Date().toISOString(),
-        },
-        "*"
-      );
-    } catch (e) {
-      console.error("Failed to notify parent:", e);
+  // ----------------------------------------------------------------------
+  // STANDALONE UI COMPONENTS
+  // ----------------------------------------------------------------------
+
+  function createFloatingButton() {
+    if (floatingBtn) return;
+    
+    // REQUIREMENT: Special activation mechanism.
+    // The widget should only appear if the URL has ?feedback=true
+    // This prevents normal website visitors from seeing the feedback tool.
+    const urlParams = new URLSearchParams(window.location.search);
+    const hasFeedbackParam = urlParams.get('feedback') === 'true';
+
+    if (!hasFeedbackParam) {
+      console.log("Feedback Widget: Standalone mode is dormant. Add '?feedback=true' to the URL to activate.");
+      return; 
     }
+    
+    floatingBtn = document.createElement("button");
+    // Ensure button sits below the overlay using z-index
+    floatingBtn.style.cssText = `
+      position: fixed;
+      bottom: 30px;
+      right: 30px;
+      width: 60px;
+      height: 60px;
+      border-radius: 50%;
+      background-color: #14b8a6; /* teal-500 */
+      color: white;
+      border: none;
+      box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.3);
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      z-index: 2147483640; 
+      transition: all 0.3s ease;
+      font-family: sans-serif;
+    `;
+    
+    // Simple icon SVG
+    floatingBtn.innerHTML = `<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"></path></svg>`;
+    
+    floatingBtn.onmouseover = () => { floatingBtn.style.transform = "scale(1.1)"; };
+    floatingBtn.onmouseout = () => { floatingBtn.style.transform = "scale(1)"; };
+    
+    floatingBtn.onclick = () => {
+      floatingBtn.style.display = "none";
+      activateAnnotationMode();
+      createControlPanel();
+    };
+    
+    document.body.appendChild(floatingBtn);
   }
 
-  // Activate annotation mode - show clickable overlay
+  function createControlPanel() {
+    if (controlPanel) {
+      controlPanel.style.display = "flex";
+      updateControlPanel();
+      return;
+    }
+
+    controlPanel = document.createElement("div");
+    // Control panel sits above everything
+    controlPanel.style.cssText = `
+      position: fixed;
+      top: 20px;
+      right: 20px;
+      width: 320px;
+      background-color: #1e293b; /* slate-800 */
+      color: white;
+      border-radius: 12px;
+      box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.5);
+      z-index: 2147483648; 
+      font-family: ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+      display: flex;
+      flex-direction: column;
+      border: 1px solid #334155; /* slate-700 */
+      overflow: hidden;
+    `;
+
+    document.body.appendChild(controlPanel);
+    updateControlPanel();
+  }
+
+  function updateControlPanel() {
+    if (!controlPanel) return;
+
+    controlPanel.innerHTML = `
+      <div style="padding: 16px; border-bottom: 1px solid #334155; display: flex; justify-content: space-between; align-items: center; background: linear-gradient(to bottom right, #0f172a, #1e293b);">
+        <h3 style="margin: 0; font-size: 16px; font-weight: 600;">Feedback Mode Active</h3>
+        <button id="fb-close-btn" style="background: none; border: none; color: #94a3b8; cursor: pointer; padding: 4px;">
+           <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>
+        </button>
+      </div>
+      <div style="padding: 16px; flex: 1;">
+        <p style="margin: 0 0 16px 0; font-size: 14px; color: #cbd5e1;">Click anywhere on the page to leave a feedback marker.</p>
+        
+        <div style="background: #0f172a; padding: 12px; border-radius: 8px; border: 1px solid #334155; margin-bottom: 16px;">
+          <div style="display: flex; justify-content: space-between; align-items: center;">
+            <span style="font-size: 14px; font-weight: 500;">Annotations Added:</span>
+            <span style="background: #14b8a6; color: white; padding: 2px 8px; border-radius: 12px; font-size: 12px; font-weight: bold;">${annotations.length}</span>
+          </div>
+        </div>
+        
+        <button id="fb-submit-btn" ${annotations.length === 0 || isCapturing ? 'disabled' : ''} style="
+          width: 100%;
+          padding: 12px;
+          border-radius: 8px;
+          background: ${annotations.length === 0 ? '#475569' : 'linear-gradient(to right, #14b8a6, #0891b2)'};
+          color: white;
+          border: none;
+          font-weight: 600;
+          font-size: 14px;
+          cursor: ${annotations.length === 0 || isCapturing ? 'not-allowed' : 'pointer'};
+          opacity: ${annotations.length === 0 || isCapturing ? '0.7' : '1'};
+          transition: all 0.2s;
+        ">
+          ${isCapturing ? 'Saving Feedback...' : 'Submit Feedback'}
+        </button>
+      </div>
+    `;
+
+    document.getElementById("fb-close-btn").onclick = closeStandaloneMode;
+    
+    document.getElementById("fb-submit-btn").onclick = async () => {
+      if (annotations.length === 0 || isCapturing) return;
+      isCapturing = true;
+      updateControlPanel();
+      
+      try {
+        const screenshotData = await captureScreenshotInternal();
+        await saveFeedbackToFirestore({
+           projectId,
+           annotations: annotations.map(a => ({ id: a.id, x: a.x, y: a.y, comment: a.comment, number: a.number })),
+           screenshot: screenshotData.screenshot,
+           pageUrl: screenshotData.url,
+           metadata: {
+              viewport: screenshotData.viewport,
+              timestamp: screenshotData.timestamp
+           }
+        });
+        
+        alert("Feedback submitted successfully!");
+        closeStandaloneMode();
+      } catch (err) {
+        console.error(err);
+        alert("Failed to submit feedback: " + err.message);
+      } finally {
+        isCapturing = false;
+        updateControlPanel();
+      }
+    };
+  }
+
+  function closeStandaloneMode() {
+    deactivateAnnotationMode();
+    clearAnnotations();
+    if (controlPanel) controlPanel.style.display = "none";
+    if (floatingBtn) floatingBtn.style.display = "flex";
+  }
+
+  // ----------------------------------------------------------------------
+  // ANNOTATION LOGIC
+  // ----------------------------------------------------------------------
+
   function activateAnnotationMode() {
     if (annotationOverlay) return; // Already active
 
@@ -171,7 +317,7 @@
       left: 0;
       width: 100%;
       height: 100%;
-      z-index: 2147483647;
+      z-index: 2147483645;
       cursor: crosshair;
       background: rgba(0, 0, 0, 0.1);
     `;
@@ -181,16 +327,11 @@
 
     document.body.appendChild(annotationOverlay);
 
-    // Notify parent
-    window.parent.postMessage(
-      {
-        type: "ANNOTATION_MODE_ACTIVATED",
-      },
-      "*"
-    );
+    if (isInPreviewIframe) {
+      window.parent.postMessage({ type: "ANNOTATION_MODE_ACTIVATED" }, "*");
+    }
   }
 
-  // Deactivate annotation mode
   function deactivateAnnotationMode() {
     if (annotationOverlay) {
       annotationOverlay.remove();
@@ -198,15 +339,11 @@
     }
     annotationMode = false;
 
-    window.parent.postMessage(
-      {
-        type: "ANNOTATION_MODE_DEACTIVATED",
-      },
-      "*"
-    );
+    if (isInPreviewIframe) {
+      window.parent.postMessage({ type: "ANNOTATION_MODE_DEACTIVATED" }, "*");
+    }
   }
 
-  // Handle annotation click
   function handleAnnotationClick(event) {
     event.preventDefault();
     event.stopPropagation();
@@ -216,10 +353,20 @@
     const scrollY = window.pageYOffset || document.documentElement.scrollTop;
 
     // Calculate percentage position relative to entire document
-    const x =
-      ((event.clientX + scrollX) / document.documentElement.scrollWidth) * 100;
-    const y =
-      ((event.clientY + scrollY) / document.documentElement.scrollHeight) * 100;
+    const x = ((event.clientX + scrollX) / document.documentElement.scrollWidth) * 100;
+    const y = ((event.clientY + scrollY) / document.documentElement.scrollHeight) * 100;
+
+    let comment = "";
+    
+    // In standalone mode, prompt for comment immediately
+    if (!isInPreviewIframe) {
+       comment = prompt("Please enter a comment for this feedback marker:") || "";
+       if (!comment.trim()) {
+           return; // Cancelled
+       }
+    }
+
+    const number = annotations.length + 1;
 
     // Create visual marker
     const marker = document.createElement("div");
@@ -232,7 +379,7 @@
       height: 30px;
       margin-left: -15px;
       margin-top: -15px;
-      background: #FF6B6B;
+      background: #14b8a6; /* teal-500 */
       border: 3px solid white;
       border-radius: 50%;
       color: white;
@@ -242,37 +389,45 @@
       font-weight: bold;
       font-size: 14px;
       z-index: 2147483646;
-      box-shadow: 0 2px 8px rgba(0,0,0,0.3);
+      box-shadow: 0 4px 6px -1px rgba(0,0,0,0.2);
       pointer-events: none;
+      font-family: sans-serif;
     `;
-    marker.textContent = annotations.length + 1;
+    marker.textContent = number;
     document.body.appendChild(marker);
 
-    annotations.push({
+    const annotationData = {
       id: Date.now(),
       x: x,
       y: y,
       marker: marker,
-    });
+      comment: comment,
+      number: number
+    };
 
-    // Send annotation to parent
-    window.parent.postMessage(
-      {
-        type: "ANNOTATION_ADDED",
-        data: {
-          id: Date.now(),
-          x: x,
-          y: y,
-          absoluteX: event.clientX + scrollX,
-          absoluteY: event.clientY + scrollY,
-          number: annotations.length,
+    annotations.push(annotationData);
+
+    if (isInPreviewIframe) {
+      // Send annotation to parent
+      window.parent.postMessage(
+        {
+          type: "ANNOTATION_ADDED",
+          data: {
+            id: annotationData.id,
+            x: x,
+            y: y,
+            absoluteX: event.clientX + scrollX,
+            absoluteY: event.clientY + scrollY,
+            number: number,
+          },
         },
-      },
-      "*"
-    );
+        "*"
+      );
+    } else {
+      updateControlPanel();
+    }
   }
 
-  // Clear all annotations
   function clearAnnotations() {
     annotations.forEach((ann) => {
       if (ann.marker) {
@@ -281,41 +436,33 @@
     });
     annotations = [];
 
-    window.parent.postMessage(
-      {
-        type: "ANNOTATIONS_CLEARED",
-      },
-      "*"
-    );
+    if (isInPreviewIframe) {
+      window.parent.postMessage({ type: "ANNOTATIONS_CLEARED" }, "*");
+    } else {
+      updateControlPanel();
+    }
   }
 
-  // Capture screenshot using html2canvas - automatic, no user prompt needed!
-  async function captureScreenshot(requestedAnnotations) {
-    if (!window.html2canvas) {
-      console.error("❌ html2canvas not loaded yet");
-      window.parent.postMessage(
-        {
-          type: "SCREENSHOT_ERROR",
-          error: "Screenshot library not ready",
-        },
-        "*"
-      );
-      return;
-    }
+  // ----------------------------------------------------------------------
+  // SCREENSHOT & UPLOAD
+  // ----------------------------------------------------------------------
+
+  // Internal Promise-based screenshot function for reuse
+  async function captureScreenshotInternal(requestedAnnotations) {
+    if (!window.html2canvas) throw new Error("Screenshot library not ready");
+
+    // Hide overlay, markers, and control panels for clean screenshot
+    const overlay = annotationOverlay;
+    const markers = Array.from(document.querySelectorAll(".feedback-annotation-marker"));
+    const panels = [];
+    if (controlPanel) panels.push(controlPanel);
+    if (floatingBtn) panels.push(floatingBtn);
+
+    if (overlay) overlay.style.display = "none";
+    markers.forEach(m => m.style.display = "none");
+    panels.forEach(p => p.style.display = "none");
 
     try {
-      console.log("📸 Capturing screenshot with html2canvas...");
-
-      // Hide overlay and markers for clean screenshot
-      const overlay = annotationOverlay;
-      const markers = Array.from(
-        document.querySelectorAll(".feedback-annotation-marker")
-      );
-      if (overlay) overlay.style.display = "none";
-      markers.forEach(function (m) {
-        m.style.display = "none";
-      });
-
       // Capture the current viewport
       const canvas = await html2canvas(document.body, {
         allowTaint: true,
@@ -327,12 +474,8 @@
         windowHeight: window.innerHeight,
         x: window.pageXOffset,
         y: window.pageYOffset,
-        ignoreElements: function (element) {
-          // Skip elements that might have problematic CSS
-          return false;
-        },
+        ignoreElements: function (element) { return false; },
         onclone: function (clonedDoc) {
-          // Replace oklch() colors with fallback colors in the cloned document
           try {
             const styleSheets = clonedDoc.styleSheets;
             for (let i = 0; i < styleSheets.length; i++) {
@@ -341,21 +484,14 @@
                 for (let j = 0; j < rules.length; j++) {
                   const rule = rules[j];
                   if (rule.style) {
-                    // Replace oklch colors with transparent or basic colors
                     for (let prop of rule.style) {
-                      if (
-                        rule.style[prop] &&
-                        rule.style[prop].includes("oklch")
-                      ) {
+                      if (rule.style[prop] && rule.style[prop].includes("oklch")) {
                         rule.style[prop] = "transparent";
                       }
                     }
                   }
                 }
-              } catch (e) {
-                // Skip stylesheets we can't access (CORS)
-                continue;
-              }
+              } catch (e) { continue; }
             }
           } catch (e) {
             console.warn("Could not process stylesheets:", e);
@@ -363,37 +499,46 @@
         },
       });
 
-      // Restore overlay and markers
+      // Restore elements
       if (overlay) overlay.style.display = "block";
-      markers.forEach(function (m) {
-        m.style.display = "flex";
-      });
+      markers.forEach(m => m.style.display = "flex");
+      if (!isInPreviewIframe && controlPanel) controlPanel.style.display = "flex";
 
-      // Convert to base64
       const screenshot = canvas.toDataURL("image/jpeg", 0.8);
+      
+      return {
+        screenshot: screenshot,
+        url: window.location.href,
+        timestamp: new Date().toISOString(),
+        viewport: {
+          width: window.innerWidth,
+          height: window.innerHeight,
+          scrollX: window.pageXOffset,
+          scrollY: window.pageYOffset,
+        },
+        annotations: (requestedAnnotations || annotations).map(a => ({ id: a.id, x: a.x, y: a.y }))
+      };
+    } catch (e) {
+      // Ensure we restore everything before bubbling error
+      if (overlay) overlay.style.display = "block";
+      markers.forEach(m => m.style.display = "flex");
+      if (!isInPreviewIframe && controlPanel) controlPanel.style.display = "flex";
+      throw e;
+    }
+  }
 
-      console.log("✅ Screenshot captured:", screenshot.length, "bytes");
+  // Wrapper for parent iframe postMessage communication
+  async function captureScreenshot(requestedAnnotations) {
+    try {
+      console.log("📸 Capturing screenshot with html2canvas...");
+      const data = await captureScreenshotInternal(requestedAnnotations);
+      
+      console.log("✅ Screenshot captured:", data.screenshot.length, "bytes");
 
-      // Send to parent
       window.parent.postMessage(
         {
           type: "SCREENSHOT_CAPTURED",
-          data: {
-            screenshot: screenshot,
-            url: window.location.href,
-            timestamp: new Date().toISOString(),
-            viewport: {
-              width: window.innerWidth,
-              height: window.innerHeight,
-              scrollX: window.pageXOffset,
-              scrollY: window.pageYOffset,
-            },
-            annotations: (requestedAnnotations || annotations).map(function (
-              a
-            ) {
-              return { id: a.id, x: a.x, y: a.y };
-            }),
-          },
+          data: data,
         },
         "*"
       );
@@ -409,64 +554,32 @@
     }
   }
 
-  // Show a prompt is NO LONGER NEEDED - html2canvas captures automatically!
-  function showCapturePrompt() {
-    // Just call captureScreenshot directly
-    captureScreenshot();
-  }
-
   // Upload screenshot to Firebase Storage
   async function uploadScreenshot(base64Data, feedbackId) {
-    if (!base64Data || !storage) {
-      console.log("⚠️ No screenshot or storage not ready");
-      console.log("Has screenshot:", !!base64Data);
-      console.log("Storage ready:", !!storage);
-      return null;
-    }
+    if (!base64Data || !storage) return null;
 
     try {
       console.log("📤 Uploading screenshot to Storage...");
-      console.log("Data length:", base64Data.length);
-      console.log("Feedback ID:", feedbackId);
-
-      // Create storage reference
       const timestamp = new Date().getTime();
       const path = `feedback-screenshots/${feedbackId}_${timestamp}.jpg`;
-      console.log("Upload path:", path);
-
       const storageRef = storage.ref(path);
-      console.log("Storage ref created:", !!storageRef);
 
-      // Upload base64 string directly (data_url format)
-      console.log("Starting putString...");
       const uploadTask = storageRef.putString(
         base64Data,
         firebase.storage.StringFormat.DATA_URL,
         { contentType: "image/jpeg" }
       );
 
-      // Wait for upload to complete
-      const snapshot = await uploadTask;
-      console.log("✅ Upload complete, getting URL...");
-
-      // Get download URL
+      await uploadTask;
       const downloadURL = await storageRef.getDownloadURL();
       console.log("✅ Screenshot uploaded:", downloadURL);
 
       return downloadURL;
     } catch (error) {
       console.error("❌ Screenshot upload failed:", error);
-      console.error("Error code:", error.code);
-      console.error("Error message:", error.message);
-      console.error("Full error:", JSON.stringify(error, null, 2));
-
-      // If it's a permission error, log it clearly
       if (error.code === "storage/unauthorized") {
-        console.error(
-          "🚫 Storage rules deny upload. Check Firebase Console > Storage > Rules"
-        );
+        console.error("🚫 Storage rules deny upload. Check Firebase Console > Storage > Rules");
       }
-
       return null;
     }
   }
@@ -476,12 +589,10 @@
     console.log("💾 Save request received", feedbackData);
 
     try {
-      // Wait for Firebase to be ready (max 10 seconds)
-      const maxWait = 20; // 20 attempts = 10 seconds
+      const maxWait = 20;
       let attempts = 0;
 
       while (!firebaseReady && attempts < maxWait) {
-        console.log("⏳ Waiting for Firebase... attempt", attempts + 1);
         await new Promise((resolve) => setTimeout(resolve, 500));
         attempts++;
       }
@@ -490,55 +601,17 @@
         throw new Error("Firebase failed to initialize after 10 seconds");
       }
 
-      console.log("💾 Creating feedback document...");
-      console.log("Has screenshot data?", !!feedbackData.screenshot);
-      console.log("Screenshot length:", feedbackData.screenshot?.length || 0);
-
-      // TEST: Upload a simple text file to verify Storage works
-      let testFileUrl = "";
-      try {
-        console.log("🧪 TEST: Uploading simple text file to Storage...");
-        const timestamp = Date.now();
-        const testRef = storage.ref(`test-uploads/test_${timestamp}.txt`);
-        const testContent = `Test upload at ${new Date().toISOString()}\nAnnotations: ${
-          feedbackData.annotations.length
-        }`;
-
-        const uploadTask = testRef.putString(
-          testContent,
-          firebase.storage.StringFormat.RAW,
-          {
-            contentType: "text/plain",
-          }
-        );
-
-        await uploadTask;
-        testFileUrl = await testRef.getDownloadURL();
-        console.log("✅ TEST FILE UPLOADED TO STORAGE:", testFileUrl);
-      } catch (error) {
-        console.error("❌ TEST UPLOAD FAILED:", error.code, error.message);
-      }
-
-      // Upload screenshot FIRST if available
       let screenshotUrl = "";
       if (feedbackData.screenshot) {
-        console.log("📤 Uploading screenshot before creating document...");
-        // Generate a temporary ID for the upload path
-        const tempId = `temp_${Date.now()}_${Math.random()
-          .toString(36)
-          .substr(2, 9)}`;
+        const tempId = `temp_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
         screenshotUrl = await uploadScreenshot(feedbackData.screenshot, tempId);
-        console.log("Screenshot upload result:", screenshotUrl || "FAILED");
-      } else {
-        console.log("⚠️ No screenshot data provided, skipping upload");
       }
 
-      // NOW create the document with the screenshot URL (NOT base64)
       const docRef = await db.collection("feedback").add({
         projectId: feedbackData.projectId,
         pageUrl: feedbackData.pageUrl || window.location.href,
         annotations: feedbackData.annotations || [],
-        screenshotUrl: screenshotUrl || "", // Only save the URL, NOT base64
+        screenshotUrl: screenshotUrl || "",
         clientId: feedbackData.clientId || "widget_user",
         clientName: feedbackData.clientName || "Anonymous",
         metadata: {
@@ -551,30 +624,38 @@
       });
 
       console.log("✅ Feedback document created with ID:", docRef.id);
-      console.log("✅ Screenshot URL saved:", screenshotUrl || "No screenshot");
 
-      console.log("✅ Feedback fully saved with ID:", docRef.id);
-      window.parent.postMessage(
-        {
-          type: "SAVE_FEEDBACK_SUCCESS",
-          feedbackId: docRef.id,
-          screenshotUrl: screenshotUrl,
-        },
-        "*"
-      );
+      if (isInPreviewIframe) {
+        window.parent.postMessage(
+          {
+            type: "SAVE_FEEDBACK_SUCCESS",
+            feedbackId: docRef.id,
+            screenshotUrl: screenshotUrl,
+          },
+          "*"
+        );
+      }
+      
+      return docRef.id;
     } catch (error) {
       console.error("❌ Error saving feedback:", error);
-      window.parent.postMessage(
-        {
-          type: "SAVE_FEEDBACK_ERROR",
-          error: error.message || "Failed to save feedback",
-        },
-        "*"
-      );
+      if (isInPreviewIframe) {
+        window.parent.postMessage(
+          {
+            type: "SAVE_FEEDBACK_ERROR",
+            error: error.message || "Failed to save feedback",
+          },
+          "*"
+        );
+      }
+      throw error;
     }
   }
 
-  // Listen for messages from parent dashboard
+  // ----------------------------------------------------------------------
+  // MESSAGE LISTENER (PREVIEW MODE)
+  // ----------------------------------------------------------------------
+
   window.addEventListener("message", function (event) {
     // Accept messages from parent window
     if (event.source !== window.parent) return;
@@ -595,10 +676,7 @@
         break;
 
       case "CAPTURE_SCREENSHOT":
-        console.log(
-          "📸 Widget: Capture request received. Showing prompt for user gesture."
-        );
-        showCapturePrompt();
+        captureScreenshot();
         break;
 
       case "SAVE_FEEDBACK":
@@ -617,12 +695,29 @@
     }
   });
 
-  // Notify parent when ready
+  // Notify parent when ready (only if in iframe)
+  function notifyReady() {
+    if (!isInPreviewIframe) return;
+    try {
+      window.parent.postMessage(
+        {
+          type: "FEEDBACK_WIDGET_READY",
+          projectId: projectId,
+          url: window.location.href,
+          timestamp: new Date().toISOString(),
+        },
+        "*"
+      );
+    } catch (e) {
+      console.error("Failed to notify parent:", e);
+    }
+  }
+
   if (document.readyState === "loading") {
     document.addEventListener("DOMContentLoaded", notifyReady);
   } else {
     notifyReady();
   }
 
-  console.log("Feedback Widget: Initialized with project ID:", projectId);
 })();
+
