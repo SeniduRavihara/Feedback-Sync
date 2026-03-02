@@ -462,7 +462,23 @@
     markers.forEach(m => m.style.display = "none");
     panels.forEach(p => p.style.display = "none");
 
+    // SANITIZATION: html2canvas crashes immediately if it encounters 'oklch' in styles
+    // We must temporarily replace them in the live DOM before capturing
+    const originalStyles = new Map();
+    
     try {
+      // Find all elements and check their computed styles
+      const allElements = document.querySelectorAll('*');
+      allElements.forEach(el => {
+        // If the element has inline styles with oklch, save and replace
+        if (el.getAttribute('style') && el.getAttribute('style').includes('oklch')) {
+          originalStyles.set(el, el.getAttribute('style'));
+          // Extremely rudimentary replacement just to prevent crashes
+          const safeStyle = el.getAttribute('style').replace(/oklch\([^)]+\)/g, 'transparent');
+          el.setAttribute('style', safeStyle);
+        }
+      });
+
       // Capture the current viewport
       const canvas = await html2canvas(document.body, {
         allowTaint: true,
@@ -477,6 +493,7 @@
         ignoreElements: function (element) { return false; },
         onclone: function (clonedDoc) {
           try {
+            // Also sanitize stylesheets in the cloned document
             const styleSheets = clonedDoc.styleSheets;
             for (let i = 0; i < styleSheets.length; i++) {
               try {
@@ -486,7 +503,7 @@
                   if (rule.style) {
                     for (let prop of rule.style) {
                       if (rule.style[prop] && rule.style[prop].includes("oklch")) {
-                        rule.style[prop] = "transparent";
+                        rule.style[prop] = "transparent"; // Fallback to prevent crash
                       }
                     }
                   }
@@ -499,10 +516,15 @@
         },
       });
 
-      // Restore elements
+      // Restore elements and styles
       if (overlay) overlay.style.display = "block";
       markers.forEach(m => m.style.display = "flex");
       if (!isInPreviewIframe && controlPanel) controlPanel.style.display = "flex";
+      
+      // Restore original inline styles
+      originalStyles.forEach((style, el) => {
+        el.setAttribute('style', style);
+      });
 
       const screenshot = canvas.toDataURL("image/jpeg", 0.8);
       
@@ -523,6 +545,11 @@
       if (overlay) overlay.style.display = "block";
       markers.forEach(m => m.style.display = "flex");
       if (!isInPreviewIframe && controlPanel) controlPanel.style.display = "flex";
+      
+      originalStyles.forEach((style, el) => {
+        el.setAttribute('style', style);
+      });
+      
       throw e;
     }
   }
