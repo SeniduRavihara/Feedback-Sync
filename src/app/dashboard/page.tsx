@@ -5,34 +5,34 @@ import { RepoSelector } from "@/components/repo-selector";
 import { useAuth } from "@/hooks/use-auth";
 import { auth, db } from "@/lib/firebase";
 import {
-  addDoc,
-  collection,
-  doc,
-  getDoc,
-  getDocs,
-  onSnapshot,
-  query,
-  updateDoc,
-  where,
+    addDoc,
+    collection,
+    doc,
+    getDoc,
+    getDocs,
+    onSnapshot,
+    query,
+    updateDoc,
+    where,
 } from "firebase/firestore";
 import {
-  AlertCircle,
-  BrainCircuit,
-  Check,
-  CheckCircle2,
-  ChevronLeft,
-  ChevronRight,
-  Code2,
-  Eye,
-  Github,
-  LayoutDashboard,
-  Loader2,
-  LogOut,
-  MessageSquare,
-  Plus,
-  Settings,
-  Users,
-  X,
+    AlertCircle,
+    BrainCircuit,
+    Check,
+    CheckCircle2,
+    ChevronLeft,
+    ChevronRight,
+    Code2,
+    Eye,
+    Github,
+    LayoutDashboard,
+    Loader2,
+    LogOut,
+    MessageSquare,
+    Plus,
+    Settings,
+    Users,
+    X,
 } from "lucide-react";
 import { AnimatePresence, motion } from "motion/react";
 import { useRouter } from "next/navigation";
@@ -686,9 +686,32 @@ export default function Dashboard() {
                                 </select>
                               </div>
                             </div>
-                            <p className="text-neutral-300 leading-relaxed mb-6 whitespace-pre-wrap">
-                              {feedback.content}
-                            </p>
+                            {/* Primary Feedback Content */}
+                            {feedback.content && (
+                              <p className="text-neutral-300 leading-relaxed mb-6 whitespace-pre-wrap">
+                                {feedback.content}
+                              </p>
+                            )}
+                            
+                            {/* Standalone Widget Annotations List */}
+                            {feedback.annotations && feedback.annotations.length > 0 && (
+                              <div className="mb-6 space-y-3">
+                                <h3 className="text-xs font-bold text-neutral-500 uppercase tracking-widest mb-2 border-b border-[#1A1A1A] pb-2">
+                                  User Comments ({feedback.annotations.length})
+                               </h3>
+                                {feedback.annotations.map((ann: any, idx: number) => (
+                                  <div key={idx} className="flex gap-3 bg-[#121212] p-4 rounded-xl border border-[#242424]">
+                                    <div className="w-6 h-6 shrink-0 bg-[#00A388] rounded-full text-white font-bold text-xs flex items-center justify-center mt-0.5">
+                                      {ann.number || idx + 1}
+                                    </div>
+                                    <div className="flex-1">
+                                      <p className="text-sm text-neutral-300 whitespace-pre-wrap">{ann.comment || <span className="italic text-neutral-600">No comment provided</span>}</p>
+                                      <p className="text-[10px] text-neutral-600 mt-2 font-mono">Location: X: {ann.x?.toFixed(1) || '?'}%, Y: {ann.y?.toFixed(1) || '?'}%</p>
+                                    </div>
+                                  </div>
+                                ))}
+                              </div>
+                            )}
 
                             {/* Screenshot with Annotation */}
                             {(feedback.screenshot ||

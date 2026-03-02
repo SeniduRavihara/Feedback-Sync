@@ -578,7 +578,7 @@
         projectId: feedbackData.projectId,
         pageUrl: feedbackData.pageUrl || window.location.href,
         annotations: feedbackData.annotations || [],
-        screenshotUrl: screenshotUrl || "",
+        screenshot: screenshotUrl || "",
         clientId: feedbackData.clientId || "widget_user",
         clientName: feedbackData.clientName || "Anonymous",
         metadata: {
